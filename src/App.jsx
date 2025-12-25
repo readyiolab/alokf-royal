@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import { SessionProvider } from "./contexts/SessionContext";
+import { SessionProvider } from "./contexts/Sessioncontext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // Existing routes
