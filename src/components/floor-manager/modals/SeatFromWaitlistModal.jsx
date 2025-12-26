@@ -1,10 +1,10 @@
 // ============================================
 // FILE: components/floor-manager/modals/SeatFromWaitlistModal.jsx
-// Modal for seating a player from waitlist - Using shadcn
+// Modal for seating a waitlist player to a table and seat
 // ============================================
 
-import React, { useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,183 +12,178 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 const SeatFromWaitlistModal = ({
   open,
   onOpenChange,
+  tables = [],
+  onSelectSeat,
   selectedEntry,
-  tables,
-  onSubmit,
+  title = 'Select a seat for the player:',
 }) => {
-  const [form, setForm] = useState({
-    table_id: '',
-    seat_number: '',
-    buy_in_amount: '',
-  });
-  const [loading, setLoading] = useState(false);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [selectedSeat, setSelectedSeat] = useState(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.table_id || !form.seat_number || !selectedEntry) return;
+  // Calculate available seats for each table
+  const tablesWithSeats = useMemo(() => {
+    return tables
+      .filter((table) => table.table_status === 'active')
+      .map((table) => {
+        const occupiedSeats = (table.players || []).map((p) => p.seat_number);
+        const allSeats = Array.from({ length: table.max_seats || 9 }, (_, i) => i + 1);
+        const availableSeats = allSeats.filter((seat) => !occupiedSeats.includes(seat));
+        
+        return {
+          ...table,
+          availableSeats,
+          openCount: availableSeats.length,
+        };
+      })
+      .filter((table) => table.openCount > 0) // Only show tables with open seats
+      .sort((a, b) => b.openCount - a.openCount); // Sort by most open seats first
+  }, [tables]);
 
-    setLoading(true);
-    try {
-      await onSubmit(selectedEntry.waitlist_id, {
-        table_id: parseInt(form.table_id),
-        seat_number: parseInt(form.seat_number),
-        buy_in_amount:
-          parseFloat(form.buy_in_amount) ||
-          selectedEntry.buy_in_range_min ||
-          5000,
-      });
-      setForm({ table_id: '', seat_number: '', buy_in_amount: '' });
-    } finally {
-      setLoading(false);
+  const handleSeatClick = (table, seat) => {
+    setSelectedTable(table);
+    setSelectedSeat(seat);
+  };
+
+  const handleConfirm = () => {
+    if (selectedTable && selectedSeat && onSelectSeat) {
+      // Call onSelectSeat with table and seat info
+      onSelectSeat(selectedTable, selectedSeat);
+      handleClose();
     }
   };
 
   const handleClose = () => {
-    setForm({ table_id: '', seat_number: '', buy_in_amount: '' });
+    setSelectedTable(null);
+    setSelectedSeat(null);
     onOpenChange(false);
   };
 
-  // Get selected table
-  const selectedTable = tables.find(
-    (t) => t.table_id === parseInt(form.table_id)
-  );
+  // Format stakes display
+  const formatStakes = (table) => {
+    if (table.stakes) return table.stakes;
+    return `₹${table.small_blind || 50}/₹${table.big_blind || 100}`;
+  };
 
-  // Get available seats for selected table
-  const occupiedSeats = selectedTable?.players?.map((p) => p.seat_number) || [];
-  const availableSeats = [];
-  if (selectedTable) {
-    for (let i = 1; i <= selectedTable.max_seats; i++) {
-      if (!occupiedSeats.includes(i)) {
-        availableSeats.push(i);
-      }
+  // Get game type badge
+  const getGameTypeBadge = (gameType) => {
+    if (gameType?.includes('Omaha') || gameType?.includes('PLO')) {
+      return 'PLO';
     }
-  }
+    return 'NL';
+  };
 
-  if (!selectedEntry) return null;
+  const playerName = selectedEntry?.player_name || 'Player';
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-md">
+      <DialogContent className="bg-[#1a1a2e] border-gray-700 text-white max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <UserPlus className="w-5 h-5 text-emerald-500" />
-            Seat from Waitlist
+          <DialogTitle className="flex items-center gap-2 text-gray-300 text-sm font-normal">
+            {title}
           </DialogTitle>
+          {selectedEntry && (
+            <p className="text-xs text-emerald-400 font-medium mt-2">
+              Seating: {playerName}
+            </p>
+          )}
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Waitlist Info */}
-          <div className="p-3 bg-gray-800 border border-gray-700 rounded-lg">
-            <p className="font-medium text-white">{selectedEntry.player_name}</p>
-            <p className="text-sm text-gray-400">
-              Waiting for: {selectedEntry.requested_game_type || 'Any game'}
-            </p>
-            <p className="text-sm text-gray-400">
-              Buy-in: ₹{selectedEntry.buy_in_range_min || '?'} - ₹
-              {selectedEntry.buy_in_range_max || '?'}
-            </p>
-          </div>
+        {/* Scrollable Tables List */}
+        <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2">
+          {tablesWithSeats.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-400">No tables with open seats available</p>
+            </div>
+          ) : (
+            tablesWithSeats.map((table) => (
+              <div
+                key={table.table_id}
+                className={`bg-[#12121c] border rounded-xl p-4 transition-all ${
+                  selectedTable?.table_id === table.table_id
+                    ? 'border-emerald-500 ring-1 ring-emerald-500/50'
+                    : 'border-gray-700/50 hover:border-gray-600'
+                }`}
+              >
+                {/* Table Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-white font-semibold text-base">
+                      Table {table.table_number} - {table.table_name}
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      {formatStakes(table)} {getGameTypeBadge(table.game_type)}
+                    </p>
+                  </div>
+                  <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-2 py-1">
+                    {table.openCount} open
+                  </Badge>
+                </div>
 
-          {/* Table Selection */}
-          <div className="space-y-2">
-            <Label className="text-gray-300">Select Table</Label>
-            <Select
-              value={form.table_id}
-              onValueChange={(v) =>
-                setForm({ ...form, table_id: v, seat_number: '' })
-              }
-            >
-              <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                <SelectValue placeholder="Select a table" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                {tables
-                  .filter((t) => (t.players?.length || 0) < t.max_seats)
-                  .map((t) => (
-                    <SelectItem key={t.table_id} value={t.table_id.toString()}>
-                      {t.table_name} - {t.game_type} ({t.players?.length || 0}/
-                      {t.max_seats})
-                    </SelectItem>
+                {/* Available Seats Grid */}
+                <div className="flex flex-wrap gap-2">
+                  {table.availableSeats.map((seat) => (
+                    <Button
+                      key={seat}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSeatClick(table, seat)}
+                      className={`min-w-[70px] h-9 transition-all ${
+                        selectedTable?.table_id === table.table_id && selectedSeat === seat
+                          ? 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700'
+                          : 'bg-[#1a1a2e] border-gray-600 text-gray-300 hover:border-emerald-500 hover:text-emerald-400'
+                      }`}
+                    >
+                      Seat {seat}
+                    </Button>
                   ))}
-              </SelectContent>
-            </Select>
-          </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
 
-          {/* Seat Selection */}
-          {form.table_id && (
-            <div className="space-y-2">
-              <Label className="text-gray-300">Select Seat</Label>
-              <div className="flex flex-wrap gap-2">
-                {availableSeats.map((seat) => (
-                  <Button
-                    key={seat}
-                    type="button"
-                    variant={
-                      form.seat_number === seat.toString() ? 'default' : 'outline'
-                    }
-                    size="sm"
-                    onClick={() =>
-                      setForm({ ...form, seat_number: seat.toString() })
-                    }
-                    className={`w-10 h-10 ${
-                      form.seat_number === seat.toString()
-                        ? 'bg-emerald-600'
-                        : 'border-gray-700 text-gray-300'
-                    }`}
-                  >
-                    {seat}
-                  </Button>
-                ))}
+        {/* Footer with Confirm Button */}
+        {tablesWithSeats.length > 0 && (
+          <div className="pt-4 border-t border-gray-700/50 mt-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-400">
+                {selectedTable && selectedSeat ? (
+                  <span>
+                    Selected:{' '}
+                    <span className="text-emerald-400 font-medium">
+                      Table {selectedTable.table_number}, Seat {selectedSeat}
+                    </span>
+                  </span>
+                ) : (
+                  'Click a seat to select'
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={!selectedTable || !selectedSeat}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Seat Player
+                </Button>
               </div>
             </div>
-          )}
-
-          {/* Buy-in Amount */}
-          <div className="space-y-2">
-            <Label className="text-gray-300">Buy-in Amount (₹)</Label>
-            <Input
-              type="number"
-              className="bg-gray-800 border-gray-700 text-white"
-              value={form.buy_in_amount}
-              onChange={(e) =>
-                setForm({ ...form, buy_in_amount: e.target.value })
-              }
-              placeholder={`e.g. ${selectedEntry.buy_in_range_min || 5000}`}
-            />
           </div>
-
-          {/* Buttons */}
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={!form.table_id || !form.seat_number || loading}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {loading ? 'Seating...' : 'Seat Player'}
-            </Button>
-          </div>
-        </form>
+        )}
       </DialogContent>
     </Dialog>
   );

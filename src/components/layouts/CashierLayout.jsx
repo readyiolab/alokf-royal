@@ -52,6 +52,14 @@ const CashierLayout = ({ children }) => {
       badge: dashboard?.total_transactions || 0
     },
     {
+      name: 'Players  ',
+      href: '/cashier/players',
+      icon: Users,
+      description: 'Manage player accounts',
+      badge: dashboard?.total_players || 0
+    },
+  
+    {
       name: 'CRM',
       href: '/cashier/crm',
       icon: Users,

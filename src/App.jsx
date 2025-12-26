@@ -36,7 +36,7 @@ import CRM from "./pages/cashier/CRM";
 
 // Player pages
 // import PlayerDashboard from "./pages/player/Dashboard";
-import PlayerProfile from "./pages/player/Profile";
+// import PlayerProfile from "./pages/player/Profile";
 // import PlayerKYC from "./pages/player/KYC";
 // import PlayerHistory from "./pages/player/History";
 // import PlayerNotifications from "./pages/player/Notifications";
