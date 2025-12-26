@@ -7,6 +7,7 @@
 // 2. Waitlist shows LIVE availability (T2S4 format)
 // 3. Call time is 60 minutes
 // 4. Shows players finishing soon in waitlist
+// 5. ✅ NEW: Dealer timer PAUSE/RESUME functionality
 // ============================================
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -30,6 +31,8 @@ import {
   VolumeX,
   ArrowRightLeft,
   MapPin,
+  Sparkles,
+  ListChecks,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -70,6 +73,188 @@ import {
 } from "../../components/floor-manager/modals";
 import TransferPlayerModal from "../../components/floor-manager/modals/TransferPlayerModal";
 import SeatSelectionModal from "../../components/floor-manager/modals/SeatFromWaitlistModal";
+
+// ============================================
+// ✅ DEALER DISPLAY COMPONENT (INLINE)
+// Shows dealer on table with timer pause/resume indication
+// ============================================
+const DealerOnTable = ({
+  dealer,
+  timerData,
+  onRemoveDealer,
+  tableId,
+}) => {
+  if (!dealer) return null;
+
+  const {
+    shiftRemaining = 0,
+    breakRemaining = 0,
+    isPaused = false,
+    pausedRemaining = 0,
+    isShiftEnding = false,
+    isShiftOverdue = false,
+  } = timerData || {};
+
+  // Format time display
+  const formatTimeDisplay = (seconds) => {
+    if (seconds === null || seconds === undefined) return "0:00";
+    const absSeconds = Math.abs(Math.floor(seconds));
+    const mins = Math.floor(absSeconds / 60);
+    const secs = absSeconds % 60;
+    const formatted = `${mins}:${secs.toString().padStart(2, '0')}`;
+    return seconds < 0 ? `-${formatted}` : formatted;
+  };
+
+  // Get background color based on state
+  const getBgColor = () => {
+    if (isShiftOverdue) return 'bg-red-600 animate-pulse';
+    if (isShiftEnding) return 'bg-orange-600';
+    return 'bg-gray-800';
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      
+      <div className={`px-3 py-2 rounded-lg flex justify-center items-center gap-7 text-center ${getBgColor()}`}>
+        <p className="text-white font-semibold text-xs truncate max-w-[70px]">
+          D:{dealer.dealer_name}
+        </p>
+        <p
+          className={`text-sm font-mono font-bold ${
+            isShiftOverdue
+              ? "text-red-200"
+              : isShiftEnding
+              ? "text-orange-200"
+              : "text-amber-400"
+          }`}
+        >
+          {formatTimeDisplay(shiftRemaining)}
+          {isShiftOverdue && " ⚠"}
+        </p>
+        <p className="text-gray-400 text-[8px]">
+          {isShiftOverdue
+            ? "OVERDUE"
+            : isShiftEnding
+            ? "ENDING SOON"
+            : "Shift Time"}
+        </p>
+        <Button
+          onClick={() => onRemoveDealer(tableId)}
+          size="sm"
+          className="mt-1 bg-orange-500 hover:bg-orange-600 h-5 text-[9px] px-2"
+        >
+          <Coffee className="w-2.5 h-2.5 mr-0.5" /> Break
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// ✅ DEALER SIDEBAR ITEM COMPONENT (INLINE)
+// Shows dealer in sidebar with pause/resume state
+// ============================================
+const DealerSidebarItem = ({
+  dealer,
+  timerData,
+  tables,
+  onDealerAvailable,
+}) => {
+  const isAssigned = tables.some((t) => t.dealer?.dealer_id === dealer.dealer_id);
+  const assignedTable = tables.find((t) => t.dealer?.dealer_id === dealer.dealer_id);
+  const isOnBreak = dealer.dealer_status === 'on_break';
+
+  const {
+    shiftRemaining = 0,
+    breakRemaining = 0,
+    isPaused = false,
+    pausedRemaining = 0,
+    isShiftEnding = false,
+    isShiftOverdue = false
+  } = timerData || {};
+
+  const formatTimeDisplay = (seconds) => {
+    if (seconds === null || seconds === undefined) return "0:00";
+    const absSeconds = Math.abs(Math.floor(seconds));
+    const mins = Math.floor(absSeconds / 60);
+    const secs = absSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-2 py-1.5">
+      <div className="flex items-center gap-2">
+        {/* Avatar */}
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${
+            isOnBreak
+              ? 'bg-orange-600'
+              : isAssigned
+              ? 'bg-blue-600'
+              : 'bg-gray-600'
+          }`}
+        >
+          {dealer.dealer_name?.charAt(0)}
+        </div>
+
+        {/* Info */}
+        <div>
+          <p className="text-white text-xs font-medium">
+            {dealer.dealer_name}
+          </p>
+
+          {isOnBreak ? (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-orange-400 text-[10px]">Break</span>
+              <span className="text-orange-300 text-[10px] font-mono">
+                {formatTimeDisplay(breakRemaining)} left
+              </span>
+              {/* ✅ Show paused shift time */}
+              {pausedRemaining > 0 && (
+                <Badge className="bg-yellow-600/50 text-yellow-300 text-[8px] px-1">
+                  <Pause className="w-2 h-2 mr-0.5 inline" />
+                  {formatTimeDisplay(pausedRemaining)} paused
+                </Badge>
+              )}
+            </div>
+          ) : isAssigned ? (
+            <div className="flex items-center gap-1">
+              <Badge className={`${isShiftOverdue ? 'bg-red-600/50 text-red-300' : isShiftEnding ? 'bg-orange-600/50 text-orange-300' : 'bg-blue-600/50 text-blue-300'} text-[9px] px-1`}>
+                {assignedTable?.table_name}
+              </Badge>
+              <span className={`text-[10px] font-mono ${isShiftOverdue ? 'text-red-300' : isShiftEnding ? 'text-orange-300' : 'text-blue-300'}`}>
+                {formatTimeDisplay(shiftRemaining)}
+                {isShiftOverdue && ' ⚠'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span className="text-emerald-400 text-[10px]">Available</span>
+              {/* ✅ Show paused time that will resume when assigned */}
+              {pausedRemaining > 0 && (
+                <Badge className="bg-blue-600/50 text-blue-300 text-[8px] px-1">
+                  {formatTimeDisplay(pausedRemaining)} to resume
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Action Button - Resume from break */}
+      {isOnBreak && (
+        <Button
+          onClick={() => onDealerAvailable(dealer.dealer_id)}
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700 h-6 w-6 p-0"
+          title="Mark as available"
+        >
+          <Play className="w-3 h-3" />
+        </Button>
+      )}
+    </div>
+  );
+};
 
 // ============================================
 // WAITLIST ENTRY WITH LIVE AVAILABILITY (T2S4 format)
@@ -332,8 +517,10 @@ const AlertNotificationPanel = ({
     });
   });
 
+  // ✅ DEALER ALERTS
   dealers.forEach((dealer) => {
     const timerData = getDealerTimer(dealer.dealer_id, dealer.dealer_status);
+    
     if (dealer.dealer_status === "on_table") {
       const remaining = timerData?.shiftRemaining || 0;
       if (remaining <= 300 && remaining > 0) {
@@ -366,6 +553,7 @@ const AlertNotificationPanel = ({
         });
       }
     }
+    
     if (dealer.dealer_status === "on_break") {
       const remaining = timerData?.breakRemaining || 0;
       if (remaining <= 120 && remaining > 0) {
@@ -625,7 +813,7 @@ const PlayerSeat = ({
       const mins = Math.floor(remainingSeconds / 60);
       const secs = remainingSeconds % 60;
       displayTime = `${mins}:${secs.toString().padStart(2, "0")}`;
-      timeLabel = "Min Play Left";
+      timeLabel = "Time Left";
       isWarning = remainingSeconds <= 600;
     } else {
       // ✅ FIX: Timer STOPS at 0, shows TIME UP
@@ -659,39 +847,39 @@ const PlayerSeat = ({
     : player.played_minutes || 0;
 
   const getBgColor = () => {
-    if (isCritical) return "bg-red-900/90";
-    if (isCallTime) return "bg-orange-900/90";
-    if (isOnBreak) return "bg-yellow-900/90";
-    if (isTimeUp && isPlaying) return "bg-blue-900/90";
-    if (isWarning) return "bg-amber-900/90";
-    return "bg-gray-900/90";
-  };
-  const getBorderColor = () => {
-    if (isCritical) return "border-red-500";
-    if (isCallTime) return "border-orange-500";
-    if (isOnBreak) return "border-yellow-500";
-    if (isTimeUp && isPlaying) return "border-blue-500";
-    if (isWarning) return "border-amber-500";
-    return "border-gray-600";
-  };
+  if (isCritical) return "bg-red-900/90";
+  if (isCallTime) return "bg-orange-900/90";
+  if (isOnBreak) return "bg-yellow-900/90";
+  // REMOVED: if (isTimeUp && isPlaying) return "bg-blue-900/90";
+  if (isWarning) return "bg-amber-900/90";
+  return "bg-gray-900/90";
+};
+ const getBorderColor = () => {
+  if (isCritical) return "border-red-500";
+  if (isCallTime) return "border-orange-500";
+  if (isOnBreak) return "border-yellow-500";
+  // REMOVED: if (isTimeUp && isPlaying) return "border-blue-500";
+  if (isWarning) return "border-amber-500";
+  return "border-gray-600";
+};
   const getTimerColor = () => {
-    if (isCritical) return "text-red-400";
-    if (isCallTime) return "text-orange-400";
-    if (isOnBreak) return "text-yellow-400";
-    if (isTimeUp && isPlaying) return "text-blue-400";
-    if (isWarning) return "text-amber-400";
-    return "text-emerald-400";
-  };
+  if (isCritical) return "text-red-400";
+  if (isCallTime) return "text-orange-400";
+  if (isOnBreak) return "text-yellow-400";
+  // REMOVED: if (isTimeUp && isPlaying) return "text-blue-400";
+  if (isWarning) return "text-amber-400";
+  return "text-emerald-400";
+};
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <div
-          className={`cursor-pointer group ${
+          className={`cursor-pointer group  ${
             isCritical ? "animate-pulse" : ""
           }`}
         >
-          <div className="absolute -top-2 -right-2 z-10">
+          <div className="absolute -top-5 right-4 z-10">
             <Badge
               className={`${
                 isCritical
@@ -710,7 +898,7 @@ const PlayerSeat = ({
               {displayTime}
             </Badge>
           </div>
-          <div className="absolute -top-1 -left-1 z-10 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+          <div className="absolute -top-2 -left-1 z-10 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
             <span className="text-white text-[8px] font-bold">
               {seatNumber}
             </span>
@@ -726,7 +914,7 @@ const PlayerSeat = ({
                       ? "bg-orange-500 text-orange-900"
                       : isOnBreak
                       ? "bg-yellow-500 text-yellow-900"
-                      : "bg-blue-500 text-blue-900"
+                      : "bg-red-500 text-white"
                   } text-[7px] px-1.5 py-0 flex items-center gap-0.5`}
                 >
                   {isCallTime ? (
@@ -785,7 +973,7 @@ const PlayerSeat = ({
             {isTimeUp && (
               <DropdownMenuItem
                 onClick={onCallTime}
-                className="text-blue-400 cursor-pointer text-xs py-1"
+                className="text-red-400 cursor-pointer text-xs py-1"
               >
                 <Timer className="w-3 h-3 mr-2" /> Call Time (60 min)
               </DropdownMenuItem>
@@ -834,6 +1022,7 @@ const EmptySeat = ({ seatNumber, onClick }) => (
 
 // ============================================
 // POKER TABLE COMPONENT
+// ✅ UPDATED: Uses getDealerTimer for dealer display
 // ============================================
 const PokerTable = ({
   table,
@@ -859,7 +1048,7 @@ const PokerTable = ({
       angleStep = 360 / total;
     const angle = startAngle + seatIndex * angleStep;
     const radian = (angle * Math.PI) / 180;
-    return { x: 50 + 46 * Math.cos(radian), y: 50 + 42 * Math.sin(radian) };
+    return { x: 50 + 46 * Math.cos(radian), y: 58 + 40 * Math.sin(radian) };
   };
 
   const seats = [];
@@ -872,113 +1061,75 @@ const PokerTable = ({
     });
   }
 
+  // ✅ Get dealer timer data using the hook
   const dealerTimerData = dealer
     ? getDealerTimer(dealer.dealer_id, dealer.dealer_status)
     : null;
-  const dealerShiftMins = dealerTimerData?.shiftRemaining
-    ? Math.floor(dealerTimerData.shiftRemaining / 60)
-    : 0;
-  const dealerShiftSecs = dealerTimerData?.shiftRemaining
-    ? dealerTimerData.shiftRemaining % 60
-    : 0;
-  const dealerIsEnding =
-    dealerTimerData?.shiftRemaining > 0 &&
-    dealerTimerData?.shiftRemaining <= 300;
-  const dealerIsOverdue =
-    dealer?.dealer_status === "on_table" &&
-    dealerTimerData?.shiftRemaining <= 0;
+  
+  const dealerShiftRemaining = dealerTimerData?.shiftRemaining || 0;
+  
 
   return (
-    <div className="bg-[#1e1e2d] rounded-2xl border border-gray-700/50 overflow-hidden shadow-xl">
+    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl border border-gray-700/50 overflow-hidden shadow-xl">
       <div className="relative w-full aspect-[4/3] p-4">
-        <div
-          className="absolute inset-[12%] rounded-[50%]"
-          style={{
-            background:
-              "radial-gradient(ellipse at 50% 40%, #2d8a5e 0%, #1d6847 40%, #145535 70%, #0d3d26 100%)",
-            border: "8px solid #6b4423",
-            boxShadow:
-              "inset 0 0 60px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.5)",
-          }}
-        >
-          <div className="absolute inset-4 rounded-[50%] border border-[#3d9a6a]/30" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center opacity-20">
-              <p className="text-white text-xs tracking-[0.4em] font-light">
-                ROYAL FLUSH
-              </p>
-            </div>
-          </div>
-          <div className="absolute top-[20%] left-1/2 transform -translate-x-1/2">
-            <Badge
-              className={`${
-                table.game_type?.includes("Omaha")
-                  ? "bg-purple-600"
-                  : "bg-amber-600"
-              } text-white text-[10px] px-2 py-0.5`}
-            >
-              {table.game_type?.includes("Omaha") ? "PLO" : "Hold'em"}
-            </Badge>
-          </div>
-          <div className="absolute bottom-[18%] left-1/2 transform -translate-x-1/2 text-center">
-            <p className="text-white font-bold text-base">{table.table_name}</p>
-            <p className="text-amber-400 text-xs font-medium">{table.stakes}</p>
-            <p className="text-gray-400 text-[10px]">
-              Min Buy-in: ₹{table.minimum_buy_in?.toLocaleString() || "500"}
-            </p>
-          </div>
-        </div>
+       <div
+  className="absolute inset-[12%] rounded-[50%]"
+  style={{
+    background: `
+      radial-gradient(ellipse at 50% 40%, 
+        #2ecc71 0%, 
+        #27ae60 20%, 
+        #229954 40%, 
+        #1e8449 60%, 
+        #196f3d 80%, 
+        #145a32 100%
+      )
+    `,
+    border: "8px solid #1a1a1a",
+    boxShadow:
+      "inset 0 0 60px rgba(0,0,0,0.5), inset 0 0 120px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.5)",
+  }}
+>
+  <div className="absolute inset-4 rounded-[50%] border border-[#3d9a6a]/30" />
+  <div className="absolute inset-0 flex items-center justify-center">
+    <div className="text-center opacity-20">
+      <p className="text-white text-xs tracking-[0.4em] font-light">
+        ROYAL FLUSH
+      </p>
+    </div>
+  </div>
+  <div className="absolute top-[20%] left-1/2 transform -translate-x-1/2">
+    <Badge
+      className={`${
+        table.game_type?.includes("Omaha")
+          ? "bg-purple-600"
+          : "bg-amber-600"
+      } text-white text-[10px] px-2 py-0.5`}
+    >
+      {table.game_type?.includes("Omaha") ? "PLO" : "Hold'em"}
+    </Badge>
+  </div>
+  <div className="absolute bottom-[18%] left-1/2 transform -translate-x-1/2 text-center">
+    <p className="text-white font-bold text-base">{table.table_name}</p>
+    <p className="text-amber-400 text-xs font-medium">{table.stakes}</p>
+    <p className="text-gray-400 text-[10px]">
+      Min Buy-in: ₹{table.minimum_buy_in?.toLocaleString() || "500"}
+    </p>
+  </div>
+</div>
 
+        {/* ✅ DEALER DISPLAY - Now using getDealerTimer */}
         {dealer ? (
           <div
             className="absolute z-20"
-            style={{ right: "40%", top: "50%", transform: "translateY(-50%)" }}
+            style={{ right: "23%", top: "50%", transform: "translateY(-50%)" }}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-1 bg-emerald-900/80 px-2 py-0.5 rounded-full">
-                <span className="text-emerald-400 text-[9px]">★ DEALER</span>
-              </div>
-              <div
-                className={`px-3 py-2 rounded-lg text-center ${
-                  dealerIsOverdue
-                    ? "bg-red-600 animate-pulse"
-                    : dealerIsEnding
-                    ? "bg-orange-600"
-                    : "bg-gray-800"
-                }`}
-              >
-                <p className="text-white font-semibold text-xs truncate max-w-[70px]">
-                  {dealer.dealer_name}
-                </p>
-                <p
-                  className={`text-sm font-mono font-bold ${
-                    dealerIsOverdue
-                      ? "text-red-200"
-                      : dealerIsEnding
-                      ? "text-orange-200"
-                      : "text-amber-400"
-                  }`}
-                >
-                  {dealerShiftMins}:
-                  {dealerShiftSecs.toString().padStart(2, "0")}
-                  {dealerIsOverdue && " ⚠"}
-                </p>
-                <p className="text-gray-400 text-[8px]">
-                  {dealerIsOverdue
-                    ? "OVERDUE"
-                    : dealerIsEnding
-                    ? "ENDING SOON"
-                    : "Shift Time"}
-                </p>
-                <Button
-                  onClick={() => onRemoveDealer(table.table_id)}
-                  size="sm"
-                  className="mt-1 bg-orange-500 hover:bg-orange-600 h-5 text-[9px] px-2"
-                >
-                  <Coffee className="w-2.5 h-2.5 mr-0.5" /> Break
-                </Button>
-              </div>
-            </div>
+            <DealerOnTable
+              dealer={dealer}
+              timerData={dealerTimerData}
+              onRemoveDealer={onRemoveDealer}
+              tableId={table.table_id}
+            />
           </div>
         ) : (
           <div
@@ -1078,6 +1229,7 @@ const FloorManager = () => {
     fetchData,
     getUnseatedPlayers,
   } = useFloorManagerData(session, hasActiveSession, token) || {};
+  
   const {
     getDealerTimer,
     getPlayerTimer,
@@ -1141,7 +1293,6 @@ const FloorManager = () => {
     }
   };
   const handleSeatClick = (t, s) => {
-    // When clicking an empty seat on a table, directly open AddPlayerModal
     setSelectedTable(t);
     setSelectedSeat(s);
     setShowAddPlayer(true);
@@ -1170,12 +1321,12 @@ const FloorManager = () => {
     setConfirmDialog({
       open: true,
       title: "Send Dealer on Break",
-      description: "Send this dealer on a 15-minute break?",
+      description: "Send this dealer on a 15-minute break? Their shift timer will be paused.",
       onConfirm: async () => {
         try {
           await floorManagerService.removeDealerFromTable(tId, token);
           fetchData?.();
-          showSuccess("Dealer on break");
+          showSuccess("Dealer on break - shift timer paused");
         } catch (e) {
           showError(e.message);
         }
@@ -1187,7 +1338,7 @@ const FloorManager = () => {
     try {
       await floorManagerService.markDealerAvailable(dId, token);
       fetchData?.();
-      showSuccess("Dealer available");
+      showSuccess("Dealer available - will resume shift when assigned to table");
     } catch (e) {
       showError(e.message);
     }
@@ -1340,7 +1491,7 @@ const FloorManager = () => {
     );
 
   return (
-    <div className="min-h-screen bg-[#0a0a14]">
+    <div className="min-h-screen bg-black">
       {/* HEADER */}
       <header className="bg-[#12121c] border-b border-gray-800 px-4 py-2 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -1481,9 +1632,9 @@ const FloorManager = () => {
 
         {/* Sidebar */}
         <div className="w-72 bg-[#12121c] border-l border-gray-800 p-4 space-y-4 overflow-y-auto pb-20">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Settings className="w-4 h-4 text-amber-500" />
-            <h2 className="text-amber-500 font-bold tracking-wide text-sm">
+          <div className="flex items-center  gap-2 mb-4">
+            <Sparkles className="w-4 h-4 text-emerald-600" />
+            <h2 className=" font-bold tracking-wide text-sm">
               FLOOR OPERATIONS
             </h2>
           </div>
@@ -1495,8 +1646,9 @@ const FloorManager = () => {
               onClick={() => setWaitlistExpanded(!waitlistExpanded)}
             >
               <div className="flex items-center gap-2">
+                <ListChecks className="w-5 h-5 text-emerald-600" />
                 <span className="text-white font-medium text-xs">WAITLIST</span>
-                <Badge className="bg-amber-600 text-white text-[10px] px-1.5">
+                <Badge className="bg-gray-400 text-white text-[10px] px-1.5">
                   {waitlist?.length || 0}
                 </Badge>
               </div>
@@ -1507,7 +1659,7 @@ const FloorManager = () => {
                     setShowAddWaitlist(true);
                   }}
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 h-5 text-[10px] px-2"
+                  className="bg-emerald-600 hover:bg-emerald-70 text-white h-5 text-[10px] px-2"
                 >
                   + Add
                 </Button>
@@ -1545,14 +1697,14 @@ const FloorManager = () => {
             )}
           </div>
 
-          {/* DEALERS */}
+          {/* ✅ DEALERS - Now using DealerSidebarItem with pause/resume */}
           <div className="bg-[#1a1a2e] rounded-lg border border-gray-700/50">
             <div
               className="flex items-center justify-between px-3 py-2 cursor-pointer"
               onClick={() => setDealersExpanded(!dealersExpanded)}
             >
               <div className="flex items-center gap-2">
-                <Settings className="w-3 h-3 text-amber-500" />
+                <Users className="w-3 h-3 text-amber-500" />
                 <span className="text-white font-medium text-xs">DEALERS</span>
                 <Badge className="bg-emerald-600 text-white text-[10px] px-1.5">
                   {readyDealers} ready
@@ -1580,75 +1732,15 @@ const FloorManager = () => {
               <div className="px-2 pb-2 space-y-1 max-h-64 overflow-y-auto">
                 {dealers && dealers.length > 0 ? (
                   dealers.map((dealer) => {
-                    const isAssigned = tables.some(
-                      (t) => t.dealer?.dealer_id === dealer.dealer_id
-                    );
-                    const assignedTable = tables.find(
-                      (t) => t.dealer?.dealer_id === dealer.dealer_id
-                    );
-                    const isOnBreak = dealer.dealer_status === "on_break";
-                    const timerData = getDealerTimer(
-                      dealer.dealer_id,
-                      dealer.dealer_status
-                    );
+                    const timerData = getDealerTimer(dealer.dealer_id, dealer.dealer_status);
                     return (
-                      <div
+                      <DealerSidebarItem
                         key={dealer.dealer_id}
-                        className="flex items-center justify-between bg-gray-800/50 rounded-lg px-2 py-1.5"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${
-                              isOnBreak
-                                ? "bg-orange-600"
-                                : isAssigned
-                                ? "bg-blue-600"
-                                : "bg-gray-600"
-                            }`}
-                          >
-                            {dealer.dealer_name?.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="text-white text-xs font-medium">
-                              {dealer.dealer_name}
-                            </p>
-                            {isOnBreak ? (
-                              <div className="flex items-center gap-1">
-                                <span className="text-orange-400 text-[10px]">
-                                  Break
-                                </span>
-                                <span className="text-orange-300 text-[10px] font-mono">
-                                  {formatTime(timerData?.breakRemaining)} left
-                                </span>
-                              </div>
-                            ) : isAssigned ? (
-                              <div className="flex items-center gap-1">
-                                <Badge className="bg-blue-600/50 text-blue-300 text-[9px] px-1">
-                                  {assignedTable?.table_name}
-                                </Badge>
-                                <span className="text-blue-300 text-[10px] font-mono">
-                                  {formatTime(timerData?.shiftRemaining)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-emerald-400 text-[10px]">
-                                Available
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {isOnBreak && (
-                          <Button
-                            onClick={() =>
-                              handleDealerAvailable(dealer.dealer_id)
-                            }
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 h-6 w-6 p-0"
-                          >
-                            <Play className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </div>
+                        dealer={dealer}
+                        timerData={timerData}
+                        tables={tables}
+                        onDealerAvailable={handleDealerAvailable}
+                      />
                     );
                   })
                 ) : (

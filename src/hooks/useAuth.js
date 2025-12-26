@@ -7,10 +7,8 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
   
-  // Use ref to prevent infinite loops
   const logoutRef = useRef(null);
 
-  // Initialize auth state from localStorage - RUN ONLY ONCE
   useEffect(() => {
     const initAuth = () => {
       const storedData = authService.getStoredAuthData();
@@ -23,17 +21,15 @@ export const useAuth = () => {
     };
 
     initAuth();
-  }, []); // Empty dependency array - run only once on mount
+  }, []);
 
-  // Set auth data manually (used after login/OTP verification)
   const setAuthData = useCallback((userData, authToken) => {
-    authService.storeAuthData(authToken, userData); // ✅ Store in localStorage
+    authService.storeAuthData(authToken, userData);
     setUser(userData);
     setToken(authToken);
     setIsAuthenticated(true);
   }, []);
 
-  // Player request OTP
   const requestPlayerOTP = useCallback(async (phoneNumber) => {
     try {
       setLoading(true);
@@ -45,7 +41,6 @@ export const useAuth = () => {
     }
   }, []);
 
-  // Player verify OTP
   const verifyPlayerOTP = useCallback(async (phoneNumber, otpCode) => {
     try {
       setLoading(true);
@@ -55,9 +50,9 @@ export const useAuth = () => {
         const userData = { 
           ...response.player, 
           player_id: response.player.id,
-          role: 'player' // ✅ Ensure role is set
+          role: 'player'
         };
-        authService.storeAuthData(response.token, userData); // ✅ Store in localStorage
+        authService.storeAuthData(response.token, userData);
         setToken(response.token);
         setUser(userData);
         setIsAuthenticated(true);
@@ -71,10 +66,9 @@ export const useAuth = () => {
     }
   }, []);
 
-  // Logout function - ✅ FIXED: No dependencies
+  // ✅ FIXED: Use window.location.href instead of navigate
   const logout = useCallback(async () => {
     try {
-      // Get current token without dependency
       const currentToken = logoutRef.current || token;
       if (currentToken) {
         await authService.logout(currentToken);
@@ -86,15 +80,16 @@ export const useAuth = () => {
       setToken(null);
       setUser(null);
       setIsAuthenticated(false);
+      
+      // ✅ Force redirect to login page
+      window.location.href = '/login';
     }
-  }, []); // ✅ EMPTY dependency array - prevents unnecessary recreations
+  }, []); // Empty dependency array
 
-  // Update ref when token changes
   useEffect(() => {
     logoutRef.current = token;
   }, [token]);
 
-  // Check if user has specific role
   const hasRole = useCallback((allowedRoles) => {
     if (!user) return false;
     
@@ -109,13 +104,11 @@ export const useAuth = () => {
     return userRole === allowedRoles;
   }, [user]);
 
-  // Get user role
   const getUserRole = useCallback(() => {
     if (!user) return null;
     return user.role || (user.player_id ? 'player' : null);
   }, [user]);
 
-  // Refresh profile - ✅ FIXED: No logout dependency
   const refreshProfile = useCallback(async () => {
     if (!token) return;
     
@@ -128,15 +121,15 @@ export const useAuth = () => {
       }
     } catch (error) {
       console.error('Failed to refresh profile:', error);
-      // If unauthorized, call logout directly without dependency
       if (error.message?.includes('401')) {
         authService.clearAuthData();
         setToken(null);
         setUser(null);
         setIsAuthenticated(false);
+        window.location.href = '/login';
       }
     }
-  }, [token]); // ✅ Only token dependency - not logout
+  }, [token]);
 
   return {
     isAuthenticated,
