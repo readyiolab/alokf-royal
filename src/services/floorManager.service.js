@@ -56,6 +56,22 @@ class FloorManagerService {
   }
 
   /**
+   * GET TABLE STATISTICS
+   * GET /api/floor-manager/tables/:tableId/statistics
+   */
+  async getTableStatistics(tableId, token) {
+    try {
+      return await apiService.get(
+        `${API_ENDPOINT}/tables/${tableId}/statistics`,
+        token
+      );
+    } catch (error) {
+      console.error('Error getting table statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
    * CLOSE TABLE
    * PUT /api/floor-manager/tables/:tableId/close
    */

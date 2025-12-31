@@ -423,6 +423,55 @@ class TransactionService {
       throw apiService.handleError(error);
     }
   }
+
+  /**
+   * Add note to transaction
+   */
+  async addTransactionNote(token, transactionId, data) {
+    try {
+      // For now, send as JSON (image upload will be handled separately later)
+      const payload = {
+        note: data.note || null,
+      };
+      
+      return await apiService.post(`/transactions/${transactionId}/notes`, payload, token);
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  /**
+   * Get transaction notes
+   */
+  async getTransactionNotes(token, transactionId) {
+    try {
+      return await apiService.get(`/transactions/${transactionId}/notes`, token);
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  /**
+   * Resolve transaction notes
+   */
+  async resolveTransactionNotes(token, transactionId) {
+    try {
+      return await apiService.post(`/transactions/${transactionId}/notes/resolve`, {}, token);
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  /**
+   * Reverse transaction
+   */
+  async reverseTransaction(token, transactionId, data) {
+    try {
+      return await apiService.post(`/transactions/${transactionId}/reverse`, data, token);
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
 }
 
 export default new TransactionService();

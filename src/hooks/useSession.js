@@ -27,9 +27,16 @@ export const useSession = () => {
         const sessionData = sessionResponse.data;
         // API returns: { has_active_session: bool, session: {...} }
         const actualSession = sessionData.session || sessionData;
+        // More robust check for has_active_session
+        const hasActiveFlag = sessionData.has_active_session;
+        const isActive = hasActiveFlag === true || hasActiveFlag === 'true' || hasActiveFlag === 1 || hasActiveFlag === '1';
+        
+        console.log('Session Data:', sessionData);
+        console.log('has_active_session value:', hasActiveFlag, 'type:', typeof hasActiveFlag);
+        console.log('Setting hasActiveSession:', isActive);
         setSession(actualSession);
-        // Use has_active_session flag from API response
-        setHasActiveSession(sessionData.has_active_session || (actualSession?.is_closed === 0));
+        // Use has_active_session flag from API response (backend now handles all edge cases)
+        setHasActiveSession(isActive);
       } else {
         setSession(null);
         setHasActiveSession(false);
@@ -69,14 +76,8 @@ export const useSession = () => {
   }, [fetchSessionData]);
 
   useEffect(() => {
-  fetchSessionData();
-
-  const timeout = setTimeout(() => {
     fetchSessionData();
-  }, 10 * 60 * 1000);
-
-  return () => clearTimeout(timeout);
-}, [fetchSessionData]);
+  }, [fetchSessionData]);
 
 
   return {

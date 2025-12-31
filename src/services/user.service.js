@@ -12,17 +12,31 @@ const userService = {
    * Create a new user (cashier or floor_manager)
    */
   createUser: async (data) => {
-    const response = await api.post('/admin/users', data, getToken());
-    return response;
+    // Try cashier endpoint first, fallback to admin endpoint
+    try {
+      const response = await api.post('/cashier/cashiers', data, getToken());
+      return response;
+    } catch (err) {
+      // Fallback to admin endpoint if cashier endpoint fails
+      const response = await api.post('/admin/users', data, getToken());
+      return response;
+    }
   },
 
   /**
    * Get all users (cashiers and floor managers)
    */
   getAllUsers: async (role = null) => {
-    const endpoint = role ? `/admin/users?role=${role}` : '/admin/users';
-    const response = await api.get(endpoint, getToken());
-    return response;
+    // Try cashier endpoint first (always returns cashiers only), fallback to admin endpoint
+    try {
+      const response = await api.get('/cashier/cashiers', getToken());
+      return response;
+    } catch (err) {
+      // Fallback to admin endpoint if cashier endpoint fails
+      const adminEndpoint = role ? `/admin/users?role=${role}` : '/admin/users';
+      const response = await api.get(adminEndpoint, getToken());
+      return response;
+    }
   },
 
   /**
@@ -37,8 +51,15 @@ const userService = {
    * Update user
    */
   updateUser: async (userId, data) => {
-    const response = await api.put(`/admin/users/${userId}`, data, getToken());
-    return response;
+    // Try cashier endpoint first, fallback to admin endpoint
+    try {
+      const response = await api.put(`/cashier/cashiers/${userId}`, data, getToken());
+      return response;
+    } catch (err) {
+      // Fallback to admin endpoint if cashier endpoint fails
+      const response = await api.put(`/admin/users/${userId}`, data, getToken());
+      return response;
+    }
   },
 
   /**
@@ -53,16 +74,30 @@ const userService = {
    * Deactivate user
    */
   deactivateUser: async (userId) => {
-    const response = await api.post(`/admin/users/${userId}/deactivate`, {}, getToken());
-    return response;
+    // Try cashier endpoint first, fallback to admin endpoint
+    try {
+      const response = await api.post(`/cashier/cashiers/${userId}/deactivate`, {}, getToken());
+      return response;
+    } catch (err) {
+      // Fallback to admin endpoint if cashier endpoint fails
+      const response = await api.post(`/admin/users/${userId}/deactivate`, {}, getToken());
+      return response;
+    }
   },
 
   /**
    * Activate user
    */
   activateUser: async (userId) => {
-    const response = await api.post(`/admin/users/${userId}/activate`, {}, getToken());
-    return response;
+    // Try cashier endpoint first, fallback to admin endpoint
+    try {
+      const response = await api.post(`/cashier/cashiers/${userId}/activate`, {}, getToken());
+      return response;
+    } catch (err) {
+      // Fallback to admin endpoint if cashier endpoint fails
+      const response = await api.post(`/admin/users/${userId}/activate`, {}, getToken());
+      return response;
+    }
   },
 
   /**

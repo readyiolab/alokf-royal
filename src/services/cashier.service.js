@@ -76,7 +76,7 @@ class CashierService {
    * Start a new session with float and chip inventory
    * POST /api/cashier/start-session
    */
-  async startSession(ownerFloat, chipInventory = null) {
+  async startSession(ownerFloat, chipInventory = null, cashierId = null) {
     try {
       const token = this.getToken();
       if (!token) {
@@ -84,6 +84,9 @@ class CashierService {
       }
 
       const payload = { owner_float: ownerFloat };
+      if (cashierId) {
+        payload.cashier_id = cashierId;
+      }
       if (chipInventory) {
         payload.chip_inventory = {
           chips_100: parseInt(chipInventory.chips_100) || 0,
@@ -485,6 +488,35 @@ class CashierService {
     }
   }
 
+  /**
+   * ✅ NEW: Get float addition history for a specific session
+   * GET /api/cashier/float-history/:sessionId
+   */
+  async getFloatHistoryBySession(sessionId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token. Please login first.');
+      }
+
+      const response = await apiService.get(
+        `/cashier/float-history/${sessionId}`,
+        token
+      );
+
+      return {
+        success: true,
+        data: response.data || response || []
+      };
+    } catch (error) {
+      console.error('Get float history by session error:', error);
+      return {
+        success: false,
+        data: []
+      };
+    }
+  }
+
   // ==========================================
   // CREDIT LIMIT MANAGEMENT
   // ==========================================
@@ -653,6 +685,41 @@ class CashierService {
   validateChipBreakdown(chipBreakdown, expectedAmount) {
     const calculatedAmount = this.calculateChipValue(chipBreakdown);
     return Math.abs(calculatedAmount - expectedAmount) < 0.01;
+  }
+
+  /**
+   * Get float addition history for a specific session
+   * @param {number} sessionId - Session ID
+   */
+  async getFloatAdditionHistory(sessionId) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token. Please login first.');
+      }
+
+      // Use the existing float-history endpoint (it uses today's session)
+      // For now, we'll need to create a session-specific endpoint or use a workaround
+      // For now, return empty array and fetch from backend directly if needed
+      const response = await apiService.get(
+        `/cashier/float-history`,
+        token
+      );
+
+      // Filter by session_id if we have session-specific data
+      // For now, the endpoint returns today's session history
+      return {
+        success: true,
+        data: response.data || response || []
+      };
+    } catch (error) {
+      console.error('Get float addition history error:', error);
+      // Return empty array if endpoint doesn't exist or fails
+      return {
+        success: false,
+        data: []
+      };
+    }
   }
 }
 

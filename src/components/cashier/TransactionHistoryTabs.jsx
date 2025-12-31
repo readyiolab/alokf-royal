@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import TransactionList from '../transactions/TransactionList';
+import TransactionCardList from '../transactions/TransactionCardList';
 import playerService from '../../services/player.service';
 
 const TransactionHistoryTabs = ({
@@ -39,6 +40,7 @@ const TransactionHistoryTabs = ({
   uniquePlayers,
   onViewPlayer,
   formatCurrency,
+  onRefresh,
 }) => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('cashbook');
@@ -209,10 +211,10 @@ const TransactionHistoryTabs = ({
           </div>
 
           <CardContent className="p-0">
-            <TabsContent value="cashbook" className="m-0">
-              <TransactionList
+            <TabsContent value="cashbook" className="m-0 p-4">
+              <TransactionCardList
                 transactions={cashbookTransactions}
-                emptyMessage="No cash transactions yet today"
+                onRefresh={onRefresh || (() => window.location.reload())}
               />
             </TabsContent>
 

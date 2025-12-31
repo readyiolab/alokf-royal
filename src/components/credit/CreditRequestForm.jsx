@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, Check, Coins, CreditCard, TrendingUp, Wallet, User, Search, ChevronsUpDown, CheckCircle } from 'lucide-react';
+import { AlertCircle, Loader2, Coins, CreditCard, TrendingUp, Wallet, User, Search, ChevronsUpDown, CheckCircle } from 'lucide-react';
 import creditService from '../../services/credit.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlayerSearch } from '../../hooks/usePlayerSearch';
@@ -7,10 +7,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 export const CreditRequestForm = ({ 
   onSuccess, 
@@ -73,12 +73,12 @@ export const CreditRequestForm = ({
 
   // ✅ Fetch player credit status when player is selected
   useEffect(() => {
-    if (selectedPlayer?.player_id) {
+    if (selectedPlayer && (selectedPlayer.player_id !== null && selectedPlayer.player_id !== undefined)) {
       fetchPlayerCreditStatus(selectedPlayer.player_id);
     } else {
       setPlayerCreditStatus(null);
     }
-  }, [selectedPlayer?.player_id]);
+  }, [selectedPlayer]);
 
   const fetchPlayerCreditStatus = async (playerId) => {
     try {
@@ -123,6 +123,14 @@ export const CreditRequestForm = ({
   };
 
   const totalFromChips = calculateTotalFromChips();
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+    }).format(amount || 0);
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -191,159 +199,159 @@ export const CreditRequestForm = ({
   };
 
   return (
-    <Card className="w-full border-0 shadow-2xl rounded-2xl overflow-hidden">
-      {/* Premium Header */}
-      <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-6">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-            <Coins className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Issue Mixed Chips Credit</h2>
-            <p className="text-white/80 text-sm">Give credit to a player in mixed chips</p>
-          </div>
-        </div>
-      </div>
-
-      <CardContent className="p-6 space-y-6">
-        {/* Player Search - Premium Popover+Command */}
-        <div className="space-y-2">
-          <Label className="text-sm font-bold text-gray-700 flex items-center gap-2">
-            <User className="w-4 h-4 text-indigo-500" />
-            Select Player
-          </Label>
-          
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={open}
-                className="w-full justify-between h-14 text-left font-normal border-2 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all rounded-xl"
-              >
-                {selectedPlayer ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold text-sm">
-                      {selectedPlayer.player_name?.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{selectedPlayer.player_name}</p>
-                      <p className="text-xs text-gray-500">{selectedPlayer.phone_number}</p>
-                    </div>
+    <div className="space-y-4">
+      {/* Player Search */}
+      <div className="space-y-2">
+        <Label>Input Player Name</Label>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-full justify-between h-14 text-left font-normal"
+            >
+              {selectedPlayer ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                    {selectedPlayer.player_name?.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">{selectedPlayer.player_name}</p>
+                    {selectedPlayer.player_code && (
+                      <p className="text-xs text-muted-foreground">{selectedPlayer.player_code}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  Search player...
+                </span>
+              )}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[400px] p-0" align="start">
+            <Command shouldFilter={false}>
+              <CommandInput 
+                placeholder="Search by name or phone..." 
+                value={searchQuery}
+                onValueChange={handleSearchChange}
+              />
+              <CommandList>
+                {searchingPlayers ? (
+                  <div className="flex items-center justify-center gap-2 py-6">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <span className="text-sm text-muted-foreground">Searching...</span>
                   </div>
                 ) : (
-                  <span className="text-gray-500 flex items-center gap-2">
-                    <Search className="w-4 h-4" />
-                    Click to search players...
-                  </span>
-                )}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
-              <Command shouldFilter={false}>
-                <CommandInput 
-                  placeholder="Search by name or phone..." 
-                  value={searchQuery}
-                  onValueChange={handleSearchChange}
-                />
-                <CommandList>
-                  <CommandEmpty>
-                    {searchingPlayers ? (
-                      <div className="flex items-center justify-center gap-2 py-6">
-                        <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-                        <span className="text-sm text-gray-500">Searching...</span>
-                      </div>
-                    ) : (
-                      <span className="text-gray-500">No players found</span>
+                  <>
+                    {filteredPlayers?.length === 0 && searchQuery && (
+                      <CommandEmpty>No player found</CommandEmpty>
                     )}
-                  </CommandEmpty>
-                  <CommandGroup>
-                    <ScrollArea className="h-[280px]">
-                      {filteredPlayers.map((player) => (
-                        <CommandItem
-                          key={player.player_id}
-                          value={player.player_id.toString()}
-                          onSelect={() => handleSelectPlayer(player)}
-                          className="cursor-pointer py-3 px-3 hover:bg-indigo-50"
-                        >
-                          <div className="flex items-center gap-3 w-full">
-                            <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                              {player.player_name?.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-900 truncate">{player.player_name}</p>
-                              <p className="text-xs text-gray-500">{player.phone_number}</p>
-                            </div>
-                            {selectedPlayer?.player_id === player.player_id && (
-                              <CheckCircle className="w-5 h-5 text-indigo-500 flex-shrink-0" />
-                            )}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </ScrollArea>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* ✅ Player Credit Status Display */}
+                    {filteredPlayers?.length > 0 && (
+                      <CommandGroup>
+                        <ScrollArea className="h-[280px]">
+                          {filteredPlayers.map((player) => (
+                            <CommandItem
+                            key={`player-${player.player_id}`}
+                              value={player.player_id.toString()}
+                              onSelect={() => handleSelectPlayer(player)}
+                              className="cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold flex-shrink-0">
+                                  {player.player_name?.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-foreground truncate">{player.player_name}</p>
+                                  {player.player_code && (
+                                    <p className="text-xs text-muted-foreground">{player.player_code}</p>
+                                  )}
+                                </div>
+                                {selectedPlayer && selectedPlayer.player_id === player.player_id && (
+                                  <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </ScrollArea>
+                      </CommandGroup>
+                    )}
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
         {selectedPlayer && (
-          <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+          <div className="p-3 rounded-lg bg-muted/50 border border-border flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+              {selectedPlayer.player_name?.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="font-medium text-foreground">{selectedPlayer.player_name}</p>
+              {selectedPlayer.player_code && (
+                <p className="text-xs text-muted-foreground">{selectedPlayer.player_code}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Player Credit Status */}
+      {selectedPlayer && (
+        <Card className="bg-muted/50 border border-border">
+          <CardContent className="p-4">
             {loadingCreditStatus ? (
-              <div className="p-4 flex items-center justify-center gap-2 text-gray-500">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">Loading credit status...</span>
               </div>
             ) : playerCreditStatus ? (
-              <div className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <CreditCard className="w-4 h-4 text-indigo-600" />
-                  <span className="text-sm font-bold text-gray-900">
-                    Credit Status for {selectedPlayer.player_name}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">
+                    Credit Status
                   </span>
                 </div>
                 
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Credit Limit */}
-                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div className="bg-card rounded-lg p-3 border border-border">
                     <div className="flex items-center gap-1 mb-1">
                       <Wallet className="w-3 h-3 text-purple-500" />
-                      <span className="text-xs text-gray-500">Credit Limit</span>
+                      <span className="text-xs text-muted-foreground">Credit Limit</span>
                     </div>
                     <p className="text-lg font-bold text-purple-700">
-                      ₹{(playerCreditStatus.credit_limit || 0).toLocaleString('en-IN')}
+                      {formatCurrency(playerCreditStatus.credit_limit || 0)}
                     </p>
                   </div>
                   
-                  {/* Outstanding */}
-                  <div className="bg-white rounded-lg p-3 border border-red-200">
+                  <div className="bg-card rounded-lg p-3 border border-red-200">
                     <div className="flex items-center gap-1 mb-1">
                       <AlertCircle className="w-3 h-3 text-red-500" />
-                      <span className="text-xs text-gray-500">Outstanding</span>
+                      <span className="text-xs text-muted-foreground">Outstanding</span>
                     </div>
                     <p className="text-lg font-bold text-red-600">
-                      ₹{(playerCreditStatus.total_outstanding || 0).toLocaleString('en-IN')}
+                      {formatCurrency(playerCreditStatus.total_outstanding || 0)}
                     </p>
                   </div>
                   
-                  {/* Available */}
-                  <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <div className="bg-card rounded-lg p-3 border border-green-200">
                     <div className="flex items-center gap-1 mb-1">
                       <TrendingUp className="w-3 h-3 text-green-500" />
-                      <span className="text-xs text-gray-500">Available</span>
+                      <span className="text-xs text-muted-foreground">Available</span>
                     </div>
                     <p className="text-lg font-bold text-green-600">
-                      ₹{(playerCreditStatus.available_credit || 0).toLocaleString('en-IN')}
+                      {formatCurrency(playerCreditStatus.available_credit || 0)}
                     </p>
                   </div>
                 </div>
 
-                {/* Warning if no credit available */}
                 {playerCreditStatus.credit_limit === 0 && (
-                  <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
                       No credit limit set for this player. Please set a credit limit first.
@@ -352,270 +360,164 @@ export const CreditRequestForm = ({
                 )}
                 
                 {playerCreditStatus.total_outstanding > 0 && playerCreditStatus.available_credit === 0 && (
-                  <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-red-700">
-                      Player has reached credit limit. Outstanding: ₹{playerCreditStatus.total_outstanding.toLocaleString('en-IN')}. 
+                      Player has reached credit limit. Outstanding: {formatCurrency(playerCreditStatus.total_outstanding)}. 
                       Please settle outstanding credit first.
                     </p>
                   </div>
                 )}
 
                 {playerCreditStatus.available_credit > 0 && playerCreditStatus.available_credit < parseFloat(creditAmount || 0) && (
-                  <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                      Maximum credit available: ₹{playerCreditStatus.available_credit.toLocaleString('en-IN')}. 
+                      Maximum credit available: {formatCurrency(playerCreditStatus.available_credit)}. 
                       Reduce credit amount or settle outstanding first.
                     </p>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="p-4 text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 Unable to load credit status
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Credit Amount Card */}
-        <Card className="border-2 border-indigo-100 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 border-b border-indigo-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center">
-                <Coins className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">Mixed Chips Credit</h3>
-                <p className="text-xs text-gray-500">Enter amount and select chips</p>
-              </div>
-            </div>
-          </div>
-          
-          <CardContent className="p-4 space-y-4">
-            {/* Amount Input */}
-            <div>
-              <Label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                Credit Amount (₹) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="number"
-                min="1000"
-                step="1000"
-                value={creditAmount}
-                onChange={handleAmountChange}
-                className="h-14 text-2xl font-bold text-center border-2 border-indigo-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
-              />
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Default: ₹100,000 mixed chips. Edit to any amount needed.
-              </p>
-            </div>
-
-            {/* Chip Selection Grid */}
-            <div className="space-y-3">
-              <p className="text-sm font-bold text-gray-700">Select Chips to Give:</p>
-              
-              <div className="grid grid-cols-4 gap-3">
-                {/* ₹10,000 Chips - Purple */}
-                <div className="bg-gradient-to-b from-purple-50 to-purple-100 p-3 rounded-xl border-2 border-purple-200">
-                  <div className="w-8 h-8 bg-purple-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">10K</span>
-                  </div>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={chipBreakdown.chips_10000}
-                    onChange={(e) => handleChipChange('chips_10000', e.target.value)}
-                    className="text-center font-bold text-lg text-purple-700 border-purple-300 rounded-lg h-12"
-                  />
-                  <div className="text-xs text-purple-600 mt-2 text-center font-semibold">
-                    ₹{(chipBreakdown.chips_10000 * 10000).toLocaleString('en-IN')}
-                  </div>
-                </div>
-
-                {/* ₹5,000 Chips - Blue */}
-                <div className="bg-gradient-to-b from-blue-50 to-blue-100 p-3 rounded-xl border-2 border-blue-200">
-                  <div className="w-8 h-8 bg-blue-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">5K</span>
-                  </div>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={chipBreakdown.chips_5000}
-                    onChange={(e) => handleChipChange('chips_5000', e.target.value)}
-                    className="text-center font-bold text-lg text-blue-700 border-blue-300 rounded-lg h-12"
-                  />
-                  <div className="text-xs text-blue-600 mt-2 text-center font-semibold">
-                    ₹{(chipBreakdown.chips_5000 * 5000).toLocaleString('en-IN')}
-                  </div>
-                </div>
-
-                {/* ₹500 Chips - Green */}
-                <div className="bg-gradient-to-b from-green-50 to-green-100 p-3 rounded-xl border-2 border-green-200">
-                  <div className="w-8 h-8 bg-green-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">500</span>
-                  </div>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={chipBreakdown.chips_500}
-                    onChange={(e) => handleChipChange('chips_500', e.target.value)}
-                    className="text-center font-bold text-lg text-green-700 border-green-300 rounded-lg h-12"
-                  />
-                  <div className="text-xs text-green-600 mt-2 text-center font-semibold">
-                    ₹{(chipBreakdown.chips_500 * 500).toLocaleString('en-IN')}
-                  </div>
-                </div>
-
-                {/* ₹100 Chips - Red */}
-                <div className="bg-gradient-to-b from-red-50 to-red-100 p-3 rounded-xl border-2 border-red-200">
-                  <div className="w-8 h-8 bg-red-500 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">100</span>
-                  </div>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={chipBreakdown.chips_100}
-                    onChange={(e) => handleChipChange('chips_100', e.target.value)}
-                    className="text-center font-bold text-lg text-red-700 border-red-300 rounded-lg h-12"
-                  />
-                  <div className="text-xs text-red-600 mt-2 text-center font-semibold">
-                    ₹{(chipBreakdown.chips_100 * 100).toLocaleString('en-IN')}
-                  </div>
-                </div>
-              </div>
-
-              {/* Total Chips Selected */}
-              <div className={`p-4 rounded-xl border-2 ${
-                totalFromChips === parseFloat(creditAmount)
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
-                  : 'bg-gradient-to-r from-red-50 to-orange-50 border-red-300'
-              }`}>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-gray-700">Total Chips Selected:</span>
-                  <span className={`text-2xl font-black ${
-                    totalFromChips === parseFloat(creditAmount)
-                      ? 'text-green-600'
-                      : 'text-red-600'
-                  }`}>
-                    ₹{totalFromChips.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                {totalFromChips !== parseFloat(creditAmount) && totalFromChips > 0 && (
-                  <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Must match ₹{(parseFloat(creditAmount) || 0).toLocaleString('en-IN')}
-                  </p>
-                )}
-                {totalFromChips === parseFloat(creditAmount) && totalFromChips > 0 && (
-                  <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Chip total matches credit amount
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Credit Limit Progress */}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-600">Credit Limit Status:</span>
-                <span className={`text-xs font-bold ${
-                  (parseFloat(creditAmount) || 0) <= remainingCreditLimit 
-                    ? 'text-green-600' 
-                    : 'text-red-600'
-                }`}>
-                  {(parseFloat(creditAmount) || 0) <= remainingCreditLimit 
-                    ? '✅ Within Limit' 
-                    : '❌ Exceeds Limit'}
-                </span>
-              </div>
-              <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
-                <div 
-                  className={`h-full transition-all rounded-full ${
-                    (parseFloat(creditAmount) || 0) <= remainingCreditLimit ? 'bg-green-500' : 'bg-red-500'
-                  }`}
-                  style={{
-                    width: `${Math.min(100, ((parseFloat(creditAmount) || 0) / remainingCreditLimit) * 100)}%`
-                  }}
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Remaining: <span className="font-bold text-gray-700">₹{remainingCreditLimit.toLocaleString('en-IN')}</span>
-              </p>
-            </div>
-
-            {selectedPlayer && (
-              <div className="flex items-center gap-2 text-sm text-gray-600 bg-indigo-50 rounded-lg p-3 border border-indigo-100">
-                <User className="w-4 h-4 text-indigo-500" />
-                <span>Issuing to: <span className="font-semibold text-indigo-700">{selectedPlayer.player_name}</span></span>
               </div>
             )}
           </CardContent>
         </Card>
+      )}
 
-        {/* Notes Section */}
-        <div className="space-y-2">
-          <Label className="text-sm font-semibold text-gray-700">
-            Notes <span className="text-gray-400">(Optional)</span>
+      {/* Credit Amount */}
+      <div className="space-y-2">
+        <Label>Credit Amount</Label>
+        <Input
+          type="number"
+          min="1000"
+          step="1000"
+          value={creditAmount}
+          onChange={handleAmountChange}
+          className="h-14 text-2xl font-bold text-center"
+          placeholder="100000"
+        />
+      </div>
+
+      {/* Chip Breakdown */}
+      <Card className="bg-gradient-to-br from-slate-50 to-gray-100 border-slate-200 shadow-md">
+        <CardContent className="pt-5 pb-4">
+          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+            <Coins className="h-4 w-4" />
+            Chips to be Given
           </Label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="E.g., Player requested this amount, payment method, etc."
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none transition-all"
-            rows="3"
-          />
+          
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { key: 'chips_100', value: 100, colorClass: 'text-red-600 border-red-200 focus:border-red-400 bg-red-50', label: '₹100' },
+              { key: 'chips_500', value: 500, colorClass: 'text-green-600 border-green-200 focus:border-green-400 bg-green-50', label: '₹500' },
+              { key: 'chips_5000', value: 5000, colorClass: 'text-blue-600 border-blue-200 focus:border-blue-400 bg-blue-50', label: '₹5K' },
+              { key: 'chips_10000', value: 10000, colorClass: 'text-purple-600 border-purple-200 focus:border-purple-400 bg-purple-50', label: '₹10K' }
+            ].map(chip => (
+              <div key={chip.key} className="text-center">
+                <div className={`text-xs font-bold mb-2 ${chip.colorClass.split(' ')[0]}`}>
+                  {chip.label}
+                </div>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder=""
+                  value={chipBreakdown[chip.key] || ''}
+                  onChange={(e) => handleChipChange(chip.key, e.target.value)}
+                  className={`text-center text-lg font-bold h-12 border-2 ${chip.colorClass}`}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatCurrency((parseInt(chipBreakdown[chip.key]) || 0) * chip.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary */}
+      {totalFromChips > 0 && (
+        <div className={cn(
+          "p-4 rounded-lg border-2",
+          totalFromChips === parseFloat(creditAmount)
+            ? 'bg-green-50 border-green-200'
+            : 'bg-red-50 border-red-200'
+        )}>
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium text-gray-700">Total Chips Selected:</span>
+            <span className={cn(
+              "text-lg font-bold",
+              totalFromChips === parseFloat(creditAmount) ? 'text-green-600' : 'text-red-600'
+            )}>
+              {formatCurrency(totalFromChips)}
+            </span>
+          </div>
+          {totalFromChips !== parseFloat(creditAmount) && (
+            <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              Must match {formatCurrency(parseFloat(creditAmount) || 0)}
+            </p>
+          )}
+          {totalFromChips === parseFloat(creditAmount) && (
+            <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" />
+              Chip total matches credit amount
+            </p>
+          )}
         </div>
+      )}
 
-        {/* Error Message */}
-        {error && (
-          <Alert className="bg-red-50 border-2 border-red-200 rounded-xl">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-            <AlertDescription className="text-red-700 font-medium ml-2">{error}</AlertDescription>
-          </Alert>
-        )}
+      {/* Notes */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-gray-900">Notes <span className="text-gray-400">(Optional)</span></Label>
+        <Input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add any notes..."
+          className="h-11"
+        />
+      </div>
 
-        {/* Success Message */}
-        {success && (
-          <Alert className="bg-green-50 border-2 border-green-200 rounded-xl">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <AlertDescription className="text-green-700 font-medium ml-2">{success}</AlertDescription>
-          </Alert>
-        )}
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-        {/* Submit Button */}
+      {/* Success */}
+      {success && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-3 pt-4 border-t border-border">
         <Button
           onClick={handleSubmit}
           disabled={loading || !selectedPlayer || totalFromChips <= 0 || totalFromChips !== parseFloat(creditAmount)}
-          className={`w-full h-14 rounded-xl font-bold text-lg transition-all shadow-lg ${
-            loading || !selectedPlayer || totalFromChips <= 0 || totalFromChips !== parseFloat(creditAmount)
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : totalFromChips > remainingCreditLimit
-              ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-200'
-              : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white shadow-purple-200'
-          }`}
+          className="flex-1"
         >
           {loading ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" />
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Processing...
-            </div>
-          ) : totalFromChips > remainingCreditLimit ? (
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              Request Approval - ₹{(totalFromChips - remainingCreditLimit).toLocaleString('en-IN')} Over Limit
-            </div>
+            </>
           ) : (
-            <div className="flex items-center gap-2">
-              <Coins className="w-5 h-5" />
-              Issue ₹{totalFromChips.toLocaleString('en-IN')} Mixed Chips Credit
-            </div>
+            <>
+              <Coins className="w-4 h-4 mr-2" />
+              Issue Credit
+            </>
           )}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };
 

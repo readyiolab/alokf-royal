@@ -1,4 +1,6 @@
 // src/pages/cashier/Players.jsx
+// Redesigned Players Page with Credit, Stored Balance, and Transactions
+
 import React, { useState, useEffect } from "react";
 import CashierLayout from "../../components/layouts/CashierLayout";
 import { useAuth } from "../../hooks/useAuth";
@@ -7,53 +9,36 @@ import transactionService from "../../services/transaction.service";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users,
   Search,
   UserPlus,
-  Phone,
-  Mail,
-  Calendar,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Eye,
-  RefreshCw,
-  Filter,
+  CreditCard,
+  Wallet,
+  PiggyBank,
+  Edit2,
+  Check,
+  X,
+  Loader2,
+  Receipt,
   TrendingUp,
   TrendingDown,
-  Receipt,
-  CreditCard,
-  History,
-  MapPin,
-  Hash,
-  Wallet,
-  Activity,
+  User,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import AddPlayerDialog from "../../components/players/AddPlayerDialog";
 
 const Players = () => {
@@ -63,28 +48,75 @@ const Players = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("all");
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [showPlayerDialog, setShowPlayerDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [playerTransactions, setPlayerTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  
+  // Editing states
+  const [editingPlayerId, setEditingPlayerId] = useState(null);
+  const [editingField, setEditingField] = useState(null); // 'credit' or 'limit'
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  
+  // House player modal state
+  const [showHousePlayerModal, setShowHousePlayerModal] = useState(false);
+  const [selectedPlayerForHouse, setSelectedPlayerForHouse] = useState(null);
+  const [togglingHouse, setTogglingHouse] = useState(false);
 
-  // Fetch all players
+  // Fetch all players with their credit and stored balance
   const fetchPlayers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await playerService.getAllPlayers(token);
-      console.log("API Response:", response);
+      const response = await playerService.getAllPlayers();
+      // Handle both paginated and non-paginated responses
+      let playersList = [];
+      if (Array.isArray(response)) {
+        playersList = response;
+      } else if (response?.data?.players) {
+        playersList = response.data.players;
+      } else if (response?.players) {
+        playersList = response.players;
+      } else if (response?.data && Array.isArray(response.data)) {
+        playersList = response.data;
+      }
+      
+      // Ensure outstanding_credit is a positive number (backend calculates from tbl_credits)
+      playersList = playersList.map(p => ({
+        ...p,
+        outstanding_credit: Math.max(0, parseFloat(p.outstanding_credit || 0)),
+        is_house_player: p.is_house_player === 1 || p.is_house_player === true
+      }));
 
-      // Handle response structure - extract players array from data.players
-      const playersList =
-        response?.data?.players || response?.players || response || [];
-      console.log("Extracted Players:", playersList);
+      // Fetch stored balance for each player
+      const playersWithData = await Promise.all(
+        playersList.map(async (player) => {
+          try {
+            const storedBalance = await transactionService.getPlayerStoredBalance(
+              token,
+              player.player_id
+            );
+            return {
+              ...player,
+              stored_chips: parseFloat(storedBalance?.stored_chips || 0),
+              stored_balance_value: parseFloat(storedBalance?.total_value || storedBalance?.stored_chips || 0),
+            };
+          } catch (err) {
+            console.error(`Error fetching stored balance for player ${player.player_id}:`, err);
+            return {
+              ...player,
+              stored_chips: 0,
+              stored_balance_value: 0,
+            };
+          }
+        })
+      );
 
-      setPlayers(playersList);
-      setFilteredPlayers(playersList);
+      setPlayers(playersWithData);
+      setFilteredPlayers(playersWithData);
     } catch (err) {
       setError(err.message || "Failed to load players");
       console.error("Error fetching players:", err);
@@ -99,10 +131,24 @@ const Players = () => {
     }
   }, [token]);
 
-  // Filter players based on search and status
+  // Filter players based on search and tab
   useEffect(() => {
     let filtered = players;
 
+    // Apply tab filter
+    if (activeTab === "with-credit") {
+      filtered = filtered.filter(
+        (p) => parseFloat(p.outstanding_credit || 0) > 0
+      );
+    } else if (activeTab === "with-balance") {
+      filtered = filtered.filter(
+        (p) => parseFloat(p.stored_balance_value || p.stored_chips || 0) > 0
+      );
+    } else if (activeTab === "house") {
+      filtered = filtered.filter((p) => p.is_house_player === true || p.is_house_player === 1);
+    }
+
+    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (player) =>
@@ -112,42 +158,49 @@ const Players = () => {
           player.player_code
             ?.toLowerCase()
             .includes(searchQuery.toLowerCase()) ||
-          player.phone_number?.includes(searchQuery) ||
-          player.email?.toLowerCase().includes(searchQuery.toLowerCase())
+          player.phone_number?.includes(searchQuery)
       );
     }
 
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((player) => {
-        if (statusFilter === "active")
-          return player.is_active && !player.is_blacklisted;
-        if (statusFilter === "inactive") return !player.is_active;
-        if (statusFilter === "blacklisted") return player.is_blacklisted;
-        return true;
-      });
-    }
-
     setFilteredPlayers(filtered);
-  }, [searchQuery, statusFilter, players]);
+  }, [searchQuery, activeTab, players]);
+
+  // Calculate stats
+  const stats = {
+    totalPlayers: players.length,
+    totalCredit: players.reduce(
+      (sum, p) => {
+        const credit = Math.max(0, parseFloat(p.outstanding_credit || 0)); // Ensure non-negative
+        return sum + credit;
+      },
+      0
+    ),
+    playersWithCredit: players.filter(
+      (p) => parseFloat(p.outstanding_credit || 0) > 0
+    ).length,
+    totalStored: players.reduce(
+      (sum, p) => sum + parseFloat(p.stored_balance_value || p.stored_chips || 0),
+      0
+    ),
+    playersWithBalance: players.filter(
+      (p) => parseFloat(p.stored_balance_value || p.stored_chips || 0) > 0
+    ).length,
+  };
 
   // Fetch player transactions
   const fetchPlayerTransactions = async (playerId) => {
     if (!playerId) {
-      console.error("fetchPlayerTransactions: playerId is undefined");
       setPlayerTransactions([]);
-      setLoadingTransactions(false);
       return;
     }
 
     try {
       setLoadingTransactions(true);
-      console.log("Fetching transactions for playerId:", playerId);
       const transactions = await transactionService.getPlayerTransactionHistory(
         token,
         playerId
       );
-      console.log("Transactions received:", transactions);
-      setPlayerTransactions(transactions);
+      setPlayerTransactions(Array.isArray(transactions) ? transactions : []);
     } catch (err) {
       console.error("Error fetching transactions:", err);
       setPlayerTransactions([]);
@@ -157,71 +210,81 @@ const Players = () => {
   };
 
   const handleViewPlayer = async (player) => {
-    console.log("Selected player:", player);
     setSelectedPlayer(player);
     setShowPlayerDialog(true);
     await fetchPlayerTransactions(player.player_id);
   };
 
-  const getStatusBadge = (player) => {
-    if (player.is_blacklisted) {
-      return (
-        <Badge variant="destructive" className="flex items-center gap-1">
-          <XCircle className="w-3 h-3" />
-          Blacklisted
-        </Badge>
-      );
-    }
-    if (!player.is_active) {
-      return (
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" />
-          Inactive
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="default" className="bg-green-600 flex items-center gap-1">
-        <CheckCircle className="w-3 h-3" />
-        Active
-      </Badge>
-    );
+  // Start editing credit or limit
+  const startEditing = (playerId, field, currentValue) => {
+    setEditingPlayerId(playerId);
+    setEditingField(field);
+    setEditValue(currentValue.toString());
   };
 
-  const getKYCBadge = (status) => {
-    const variants = {
-      completed: {
-        variant: "default",
-        className: "bg-green-600",
-        label: "Verified",
-      },
-      pending: {
-        variant: "default",
-        className: "bg-yellow-600",
-        label: "Pending",
-      },
-      rejected: { variant: "destructive", label: "Rejected" },
-      not_started: { variant: "secondary", label: "Not Started" },
-    };
-    const config = variants[status] || variants.not_started;
-    return (
-      <Badge variant={config.variant} className={config.className}>
-        {config.label}
-      </Badge>
-    );
+  // Cancel editing
+  const cancelEditing = () => {
+    setEditingPlayerId(null);
+    setEditingField(null);
+    setEditValue("");
   };
 
-  const getPlayerTypeBadge = (type) => {
-    const variants = {
-      regular: { className: "bg-blue-100 text-blue-700", label: "Regular" },
-      vip: { className: "bg-purple-100 text-purple-700", label: "VIP" },
-      occasional: {
-        className: "bg-gray-100 text-gray-700",
-        label: "Occasional",
-      },
-    };
-    const config = variants[type] || variants.occasional;
-    return <Badge className={config.className}>{config.label}</Badge>;
+  // Save credit or limit
+  const saveEdit = async (playerId) => {
+    if (!editValue || parseFloat(editValue) < 0) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingField === "limit") {
+        await playerService.setPlayerCreditLimit(playerId, parseFloat(editValue));
+      } else if (editingField === "credit") {
+        // Note: Updating outstanding credit directly might not be available
+        // This would typically be done through credit transactions
+        // For now, we'll just update the local state
+        setPlayers((prev) =>
+          prev.map((p) =>
+            p.player_id === playerId
+              ? { ...p, outstanding_credit: parseFloat(editValue) }
+              : p
+          )
+        );
+      }
+
+      // Refresh player data
+      await fetchPlayers();
+      cancelEditing();
+    } catch (err) {
+      console.error("Error saving:", err);
+      setError(err.message || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle house player toggle
+  const handleHousePlayerClick = (e, player) => {
+    e.stopPropagation();
+    setSelectedPlayerForHouse(player);
+    setShowHousePlayerModal(true);
+  };
+
+  const handleToggleHousePlayer = async () => {
+    if (!selectedPlayerForHouse) return;
+
+    setTogglingHouse(true);
+    try {
+      await playerService.toggleHousePlayer(selectedPlayerForHouse.player_id);
+      await fetchPlayers();
+      setShowHousePlayerModal(false);
+      setSelectedPlayerForHouse(null);
+    } catch (err) {
+      console.error("Error toggling house player:", err);
+      setError(err.message || "Failed to toggle house player status");
+    } finally {
+      setTogglingHouse(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -269,11 +332,10 @@ const Players = () => {
       case "cash_payout":
         return <TrendingDown className="w-5 h-5 text-red-600" />;
       case "issue_credit":
+      case "credit_issued":
         return <CreditCard className="w-5 h-5 text-blue-600" />;
       case "settle_credit":
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case "expense":
-        return <Receipt className="w-5 h-5 text-orange-600" />;
+        return <Check className="w-5 h-5 text-green-600" />;
       default:
         return <Receipt className="w-5 h-5 text-gray-600" />;
     }
@@ -286,19 +348,13 @@ const Players = () => {
       case "cash_payout":
         return "text-red-600";
       case "issue_credit":
+      case "credit_issued":
         return "text-blue-600";
       case "settle_credit":
         return "text-green-600";
       default:
         return "text-gray-600";
     }
-  };
-
-  const stats = {
-    total: players.length,
-    active: players.filter((p) => p.is_active && !p.is_blacklisted).length,
-    inactive: players.filter((p) => !p.is_active).length,
-    blacklisted: players.filter((p) => p.is_blacklisted).length,
   };
 
   if (loading) {
@@ -314,550 +370,349 @@ const Players = () => {
   return (
     <CashierLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-black">
-              Players Management
-            </h1>
-            <p className="text-sm text-gray-600">
-              Manage and monitor all players
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={fetchPlayers} variant="outline" size="sm">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-            <Button
-              onClick={() => setShowAddDialog(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add Player
-            </Button>
-          </div>
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <Alert className="bg-red-50 border-red-200">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-700">
-              {error}
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="bg-white border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Players</p>
-                  <p className="text-2xl font-bold text-black">{stats.total}</p>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CreditCard className="w-4 h-4 text-red-600" />
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Total Credit</p>
+                  </div>
+                  <p className="text-3xl font-bold text-red-600 mb-1">
+                    {formatCurrency(stats.totalCredit)}
+                  </p>
+                  <p className="text-xs text-gray-600 uppercase">
+                    {stats.playersWithCredit} players with credit
+                  </p>
                 </div>
-                <Users className="w-8 h-8 text-blue-600" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white border-gray-200">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Active Players</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {stats.active}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <PiggyBank className="w-4 h-4 text-green-600" />
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Total Stored</p>
+                  </div>
+                  <p className="text-3xl font-bold text-green-600 mb-1">
+                    {formatCurrency(stats.totalStored)}
+                  </p>
+                  <p className="text-xs text-gray-600 uppercase">
+                    {stats.playersWithBalance} players with balance
                   </p>
                 </div>
-                <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white border-gray-200">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Inactive Players</p>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {stats.inactive}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-gray-600" />
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Total Players</p>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900 mb-1">
+                    {stats.totalPlayers}
+                  </p>
+                  <p className="text-xs text-gray-600 uppercase">
+                    Registered in system
                   </p>
                 </div>
-                <AlertCircle className="w-8 h-8 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border-gray-200">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Blacklisted</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {stats.blacklisted}
-                  </p>
-                </div>
-                <XCircle className="w-8 h-8 text-red-600" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Filters and Search */}
-        <Card className="bg-white border-gray-200">
+        {/* Tabs and Search */}
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 relative bg-white">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Players Directory</h2>
+                  <p className="text-sm text-gray-600">Manage all players</p>
+                </div>
+                <Button
+                  onClick={() => setShowAddDialog(true)}
+                  className="bg-orange-600 hover:bg-blue-700"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  New Player
+                </Button>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={activeTab === "all" ? "default" : "outline"}
+                  onClick={() => setActiveTab("all")}
+                  className={activeTab === "all" ? "bg-gray-900 text-white hover:bg-gray-800" : "text-gray-700 border-gray-300 hover:bg-gray-100"}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={activeTab === "with-credit" ? "default" : "outline"}
+                  onClick={() => setActiveTab("with-credit")}
+                  className={`flex items-center gap-1 ${activeTab === "with-credit" ? "bg-gray-900 text-white hover:bg-gray-800" : "text-gray-700 border-gray-300 hover:bg-gray-100"}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  With Credit
+                </Button>
+                <Button
+                  variant={activeTab === "with-balance" ? "default" : "outline"}
+                  onClick={() => setActiveTab("with-balance")}
+                  className={`flex items-center gap-1 ${activeTab === "with-balance" ? "bg-gray-900 text-white hover:bg-gray-800" : "text-gray-700 border-gray-300 hover:bg-gray-100"}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  With Balance
+                </Button>
+                <Button
+                  variant={activeTab === "house" ? "default" : "outline"}
+                  onClick={() => setActiveTab("house")}
+                  className={`flex items-center gap-1 ${activeTab === "house" ? "bg-gray-900 text-white hover:bg-gray-800" : "text-gray-700 border-gray-300 hover:bg-gray-100"}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  House
+                </Button>
+              </div>
+              
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Search by name, code, phone, or email..."
+                  placeholder="Search players..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Players</SelectItem>
-                  <SelectItem value="active">Active Only</SelectItem>
-                  <SelectItem value="inactive">Inactive Only</SelectItem>
-                  <SelectItem value="blacklisted">Blacklisted</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
 
-        {/* Players List */}
-        <Card className="bg-white border-gray-200">
-          <CardHeader>
-            <CardTitle className="text-black">
-              All Players ({filteredPlayers.length})
-            </CardTitle>
-            <CardDescription className="text-black">
-              Complete list of registered players
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {filteredPlayers.length === 0 ? (
-              <div className="text-center py-12">
+        {/* Players Grid */}
+        <div>
+          <p className="text-sm text-gray-900 mb-4">
+            Showing {filteredPlayers.length} of {stats.totalPlayers} players
+          </p>
+          
+          {filteredPlayers.length === 0 ? (
+            <Card className="bg-white border-gray-200">
+              <CardContent className="py-12 text-center">
                 <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No players found</p>
+                <p className="text-gray-900">No players found</p>
                 {searchQuery && (
                   <Button
                     variant="link"
                     onClick={() => setSearchQuery("")}
-                    className="text-blue-600"
+                    className="text-blue-600 mt-2"
                   >
                     Clear search
                   </Button>
                 )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPlayers.map((player) => {
+                // Determine avatar color (green for some players, orange for others)
+                const avatarColor = player.is_house_player ? "bg-green-100" : "bg-orange-100";
+                const avatarIconColor = player.is_house_player ? "text-green-700" : "text-orange-700";
+                const hasLeftBorder = player.is_house_player;
+                
+                return (
+                  <Card
+                    key={player.player_id}
+                    className={`bg-white border-gray-200 hover:shadow-md transition-shadow cursor-pointer ${
+                      hasLeftBorder ? "border-l-4 border-l-green-500" : ""
+                    }`}
+                    onClick={() => handleViewPlayer(player)}
+                  >
+                    <CardContent className="p-4">
+                      {/* Player Profile Section */}
+                      <div className="flex items-start gap-3 mb-4">
+                        <div 
+                          className="relative cursor-pointer"
+                          onClick={(e) => handleHousePlayerClick(e, player)}
+                        >
+                          {/* Square avatar with rounded corners */}
+                          <div className={`w-12 h-12 ${avatarColor} rounded-lg flex items-center justify-center`}>
+                            <User className={`w-6 h-6 ${avatarIconColor}`} />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-900 mb-1">
+                            {player.player_name.toLowerCase()}
+                          </h3>
+                          <div className="inline-block px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-900 font-medium">
+                            {player.player_code}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Details Grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* Credit */}
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1">CREDIT</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {formatCurrency(player.outstanding_credit || 0)}
+                          </p>
+                        </div>
+
+                        {/* Credit Limit */}
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1">CREDIT LIMIT</p>
+                          {editingPlayerId === player.player_id && editingField === "limit" ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="h-7 w-16 text-xs p-1"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveEdit(player.player_id);
+                                  if (e.key === "Escape") cancelEditing();
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  saveEdit(player.player_id);
+                                }}
+                                disabled={saving}
+                              >
+                                <Check className="w-3 h-3 text-green-600" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelEditing();
+                                }}
+                              >
+                                <X className="w-3 h-3 text-red-600" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <p className="text-sm font-semibold text-orange-600">
+                                {formatCurrency(
+                                  player.credit_limit_personal || player.credit_limit || 0
+                                )}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-4 w-4 p-0 hover:bg-transparent"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditing(
+                                    player.player_id,
+                                    "limit",
+                                    player.credit_limit_personal || player.credit_limit || 0
+                                  );
+                                }}
+                              >
+                                <Edit2 className="w-3 h-3 text-gray-500" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Stored Balance */}
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1">STORED BALANCE</p>
+                          <p className="text-sm font-semibold text-green-600">
+                            {formatCurrency(player.stored_balance_value || player.stored_chips || 0)}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Player Transactions Modal */}
+        <Dialog open={showPlayerDialog} onOpenChange={setShowPlayerDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                {selectedPlayer?.player_name} - Transaction History
+              </DialogTitle>
+            </DialogHeader>
+
+            {loadingTransactions ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              </div>
+            ) : playerTransactions.length === 0 ? (
+              <div className="text-center py-12">
+                <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No transactions found</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredPlayers.map((player) => (
+              <div className="space-y-3 mt-4">
+                {playerTransactions.map((transaction) => (
                   <div
-                    key={player.player_id}
-                    className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    key={transaction.transaction_id}
+                    className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-gray-50"
                   >
                     <div className="flex items-center gap-4 flex-1">
-                      <Avatar className="w-12 h-12">
-                        <AvatarFallback className="bg-blue-600 text-white font-semibold">
-                          {getInitials(player.player_name)}
-                        </AvatarFallback>
-                      </Avatar>
-
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        {getTransactionIcon(transaction.transaction_type)}
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-semibold text-black">
-                            {player.player_name}
-                          </h3>
-                          <Badge className="text-xs">
-                            {player.player_code}
-                          </Badge>
-                          {getStatusBadge(player)}
-                          {getKYCBadge(player.kyc_status)}
-                          {getPlayerTypeBadge(player.player_type)}
-                        </div>
-                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {player.phone_number}
-                          </span>
-                          {player.email && (
-                            <span className="flex items-center gap-1">
-                              <Mail className="w-3 h-3" />
-                              {player.email}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <Activity className="w-3 h-3" />
-                            {player.visit_count} visits
-                          </span>
-                        </div>
+                        <p className="font-medium text-gray-900 capitalize">
+                          {transaction.transaction_type?.replace(/_/g, " ")}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {formatDateTime(transaction.created_at)}
+                        </p>
+                        {transaction.notes && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            {transaction.notes}
+                          </p>
+                        )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right hidden lg:block">
-                        <p className="text-xs text-gray-600">
-                          Outstanding Credit
-                        </p>
-                        <p className="text-sm font-semibold text-orange-600">
-                          {formatCurrency(player.outstanding_credit)}
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => handleViewPlayer(player)}
-                        variant="outline"
-                        size="sm"
+                    <div className="text-right flex-shrink-0">
+                      <p
+                        className={`text-lg font-semibold ${getTransactionColor(
+                          transaction.transaction_type
+                        )}`}
                       >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View
-                      </Button>
+                        {["buy_in", "settle_credit"].includes(
+                          transaction.transaction_type
+                        )
+                          ? "+"
+                          : "-"}
+                        {formatCurrency(transaction.amount || 0)}
+                      </p>
+                      {transaction.chips_amount > 0 && (
+                        <p className="text-sm text-gray-600">
+                          Chips: {transaction.chips_amount}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Player Details Dialog with Tabs */}
-        <Dialog open={showPlayerDialog} onOpenChange={setShowPlayerDialog}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto bg-white">
-            <DialogHeader>
-              <DialogTitle className="text-black">Player Details</DialogTitle>
-              <DialogDescription className="text-black">
-                Complete information and transaction history
-              </DialogDescription>
-            </DialogHeader>
-
-            {selectedPlayer && (
-              <Tabs defaultValue="details" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="details">Details</TabsTrigger>
-                  <TabsTrigger value="transactions">
-                    <History className="w-4 h-4 mr-2" />
-                    Transactions
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="details" className="space-y-6 mt-6">
-                  {/* Profile Section */}
-                  <div className="flex items-start gap-4">
-                    <Avatar className="w-20 h-20">
-                      <AvatarFallback className="bg-blue-600 text-white text-2xl font-semibold uppercase">
-                        {getInitials(selectedPlayer.player_name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-black mb-2 uppercase">
-                        {selectedPlayer.player_name}
-                      </h3>
-                      <div className="flex gap-2 mb-3 flex-wrap">
-                        {getStatusBadge(selectedPlayer)}
-                        {getKYCBadge(selectedPlayer.kyc_status)}
-                        {getPlayerTypeBadge(selectedPlayer.player_type)}
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-gray-600">Player ID</p>
-                          <p className="font-medium text-black">
-                            {selectedPlayer.player_id}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Player Code</p>
-                          <p className="font-medium text-black">
-                            {selectedPlayer.player_code}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Information */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
-                      <Phone className="w-4 h-4" />
-                      Contact Information
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Card className="bg-gray-50 border-gray-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Phone Number
-                          </p>
-                          <p className="font-medium text-black">
-                            {selectedPlayer.phone_number}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gray-50 border-gray-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">Email</p>
-                          <p className="font-medium text-black">
-                            {selectedPlayer.email || "Not provided"}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      {selectedPlayer.address && (
-                        <Card className="bg-gray-50 border-gray-200 sm:col-span-2">
-                          <CardContent className="pt-4">
-                            <p className="text-xs text-gray-600 mb-1 flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              Address
-                            </p>
-                            <p className="font-medium text-black">
-                              {selectedPlayer.address}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Financial Summary */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
-                      <Wallet className="w-4 h-4" />
-                      Financial Summary
-                    </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="bg-green-50 border-green-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Total Buy-Ins
-                          </p>
-                          <p className="text-lg font-bold text-green-700">
-                            {formatCurrency(selectedPlayer.total_buy_ins)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-red-50 border-red-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Total Cash Outs
-                          </p>
-                          <p className="text-lg font-bold text-red-700">
-                            {formatCurrency(selectedPlayer.total_cash_outs)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-blue-50 border-blue-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Credits Issued
-                          </p>
-                          <p className="text-lg font-bold text-blue-700">
-                            {formatCurrency(
-                              selectedPlayer.total_credits_issued
-                            )}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-purple-50 border-purple-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Credits Settled
-                          </p>
-                          <p className="text-lg font-bold text-purple-700">
-                            {formatCurrency(
-                              selectedPlayer.total_credits_settled
-                            )}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-
-                  {/* Credit Information */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4" />
-                      Credit Information
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <Card className="bg-orange-50 border-orange-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Outstanding Credit
-                          </p>
-                          <p className="text-xl font-bold text-orange-700">
-                            {formatCurrency(selectedPlayer.outstanding_credit)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gray-50 border-gray-200">
-                        <CardContent className="pt-4">
-                          <p className="text-xs text-gray-600 mb-1">
-                            Credit Limit
-                          </p>
-                          <p className="text-xl font-bold text-black">
-                            {formatCurrency(selectedPlayer.credit_limit)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-
-                  {/* Activity Information */}
-                  <div>
-                    <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
-                      <Activity className="w-4 h-4" />
-                      Activity Information
-                    </h4>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between py-2 border-b border-gray-200">
-                        <span className="text-gray-600">Total Visits</span>
-                        <span className="font-semibold text-black">
-                          {selectedPlayer.visit_count}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-200">
-                        <span className="text-gray-600">Last Visit</span>
-                        <span className="font-medium text-black">
-                          {selectedPlayer.last_visit_date
-                            ? formatDate(selectedPlayer.last_visit_date)
-                            : "Never"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-200">
-                        <span className="text-gray-600">Member Since</span>
-                        <span className="font-medium text-black">
-                          {formatDate(selectedPlayer.created_at)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-200">
-                        <span className="text-gray-600">Last Updated</span>
-                        <span className="font-medium text-black">
-                          {formatDateTime(selectedPlayer.updated_at)}
-                        </span>
-                      </div>
-                      {selectedPlayer.kyc_completed_at && (
-                        <div className="flex justify-between py-2 border-b border-gray-200">
-                          <span className="text-gray-600">KYC Completed</span>
-                          <span className="font-medium text-black">
-                            {formatDateTime(selectedPlayer.kyc_completed_at)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Notes and Blacklist */}
-                  {(selectedPlayer.notes ||
-                    selectedPlayer.blacklist_reason) && (
-                    <div>
-                      <h4 className="font-semibold text-black mb-3">
-                        Additional Information
-                      </h4>
-                      <div className="space-y-3">
-                        {selectedPlayer.notes && (
-                          <Card className="bg-blue-50 border-blue-200">
-                            <CardContent className="pt-4">
-                              <p className="text-xs text-gray-600 mb-2 font-medium">
-                                Notes
-                              </p>
-                              <p className="text-sm text-black">
-                                {selectedPlayer.notes}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        )}
-                        {selectedPlayer.blacklist_reason && (
-                          <Card className="bg-red-50 border-red-200">
-                            <CardContent className="pt-4">
-                              <p className="text-xs text-red-600 mb-2 font-medium">
-                                Blacklist Reason
-                              </p>
-                              <p className="text-sm text-red-700">
-                                {selectedPlayer.blacklist_reason}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="transactions" className="mt-6">
-                  {loadingTransactions ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    </div>
-                  ) : playerTransactions.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600">
-                        No transactions found for this player
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {playerTransactions.map((transaction) => (
-                        <div
-                          key={transaction.transaction_id}
-                          className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-gray-50"
-                        >
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                              {getTransactionIcon(transaction.transaction_type)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-black capitalize">
-                                {transaction.transaction_type.replace(
-                                  /_/g,
-                                  " "
-                                )}
-                              </p>
-                              <p className="text-sm text-gray-600">
-                                {formatDateTime(transaction.created_at)}
-                              </p>
-                              {transaction.payment_mode && (
-                                <Badge
-                                  variant="outline"
-                                  className="mt-1 capitalize text-xs text-black"
-                                >
-                                  {transaction.payment_mode.replace(/_/g, " ")}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p
-                              className={`text-lg font-semibold ${getTransactionColor(
-                                transaction.transaction_type
-                              )}`}
-                            >
-                              {["buy_in", "settle_credit"].includes(
-                                transaction.transaction_type
-                              )
-                                ? "+"
-                                : "-"}
-                              {formatCurrency(transaction.amount)}
-                            </p>
-                            {transaction.chips_amount > 0 && (
-                              <p className="text-sm text-gray-600">
-                                Chips: {transaction.chips_amount}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
             )}
           </DialogContent>
         </Dialog>
@@ -866,15 +721,56 @@ const Players = () => {
         <AddPlayerDialog
           isOpen={showAddDialog}
           onClose={() => setShowAddDialog(false)}
-          onPlayerAdded={(newPlayer) => {
-            // Add the new player to the list
-            setPlayers((prev) => [...prev, newPlayer]);
-            setFilteredPlayers((prev) => [...prev, newPlayer]);
-
-            // Show success message or reload
-            console.log("New player added:", newPlayer);
+          onPlayerAdded={() => {
+            fetchPlayers();
           }}
         />
+
+        {/* House Player Toggle Modal */}
+        <Dialog open={showHousePlayerModal} onOpenChange={setShowHousePlayerModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                House Player
+              </DialogTitle>
+            </DialogHeader>
+            {selectedPlayerForHouse && (
+              <div className="space-y-4 py-4">
+                <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex-1">
+                    <p className="text-sm text-purple-700 font-medium mb-1">
+                      {selectedPlayerForHouse.player_name}
+                    </p>
+                    <p className="text-xs text-purple-600">
+                      Requires CEO permission for cashout
+                    </p>
+                  </div>
+                  <Switch
+                    checked={selectedPlayerForHouse.is_house_player || false}
+                    onCheckedChange={handleToggleHousePlayer}
+                    disabled={togglingHouse}
+                    className="data-[state=checked]:bg-purple-600"
+                  />
+                </div>
+                <div className="text-sm text-gray-600">
+                  <p className="mb-2">
+                    <strong>House Players</strong> are employees who require CEO approval before cash payout.
+                  </p>
+                  <p>
+                    When a house player requests cash payout, the system will require explicit CEO permission confirmation before processing.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => setShowHousePlayerModal(false)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Close
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </CashierLayout>
   );

@@ -2,14 +2,16 @@
 // Club Expense - Food delivery, salary advance, utilities, supplies, etc.
 
 import React, { useState, useEffect } from 'react';
-import { X, Building2, Truck, Wallet, Zap, Package, Wrench, MoreHorizontal, User, Check, Loader2, CheckCircle, Receipt, AlertCircle, Clock, RefreshCw, TrendingDown } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Building2, Truck, Wallet, Zap, Package, Wrench, MoreHorizontal, User, Check, Loader2, CheckCircle, Receipt, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Card, CardContent } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
+import { cn } from '@/lib/utils';
 import expenseService from '../../services/expense.service';
 import staffService from '../../services/staff.service';
 
@@ -153,40 +155,42 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
     setSuccess('');
   };
 
-  if (!isOpen) return null;
-
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0
+      minimumFractionDigits: 0,
     }).format(amount || 0);
   };
 
   const selectedCategory = EXPENSE_CATEGORIES.find(c => c.value === category);
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
-        <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-2xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <CardTitle className="text-xl">Club Expense</CardTitle>
-              <p className="text-sm text-indigo-100 mt-1">Record club expenses (cash from wallet)</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-        </CardHeader>
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
 
-        <CardContent className="p-6 space-y-6">
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Building2 className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex flex-col">
+              <span>Club Expense</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Food, salary, misc
+              </span>
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-4">
           {/* Category Selection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold text-gray-700">Expense Category *</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-900">Expense Category</Label>
             <div className="grid grid-cols-2 gap-3">
               {EXPENSE_CATEGORIES.map((cat) => {
                 const IconComponent = cat.icon;
@@ -496,32 +500,28 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
             </Card>
           )}
 
-          {/* Error/Success Messages */}
+          {/* Error */}
           {error && (
-            <Alert variant="destructive" className="border-red-200 bg-red-50">
-              <AlertDescription className="text-red-700">{error}</AlertDescription>
-            </Alert>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
+          {/* Success */}
           {success && (
-            <Alert className="border-emerald-200 bg-emerald-50">
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <AlertDescription className="text-emerald-700">{success}</AlertDescription>
-            </Alert>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+              <CheckCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{success}</span>
+            </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 h-12"
-            >
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <Button variant="outline" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button
-              type="button"
               onClick={handleSubmit}
               disabled={
                 loading || 
@@ -532,24 +532,21 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
                 (category === 'salary_advance' && remainingBalance && parseFloat(amount) > remainingBalance.remaining_balance) ||
                 (category === 'salary_advance' && remainingBalance?.remaining_balance <= 0)
               }
-              className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-lg disabled:shadow-none"
+              className="flex-1"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Recording...
+                  Processing...
                 </>
               ) : (
-                <>
-                  <Building2 className="w-4 h-4 mr-2" />
-                  Record Expense {amount && parseFloat(amount) > 0 && `• ${formatCurrency(parseFloat(amount))}`}
-                </>
+                "Record Expense"
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

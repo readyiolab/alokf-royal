@@ -2,13 +2,16 @@
 // Dealer Tips - Player gives chips as tip to dealer, 50% paid to dealer as cash
 
 import React, { useState, useEffect } from 'react';
-import { X, HandCoins, User, Search, Coins, Wallet, Check, Loader2, CheckCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
-import { Alert, AlertDescription } from '../ui/alert';
+import { HandCoins, Coins, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { ScrollArea } from '../ui/scroll-area';
+import { cn } from '@/lib/utils';
 import dealerService from '../../services/dealer.service';
 
 const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
@@ -106,82 +109,135 @@ const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
     setNotes('');
     setError('');
     setSuccess('');
+    setDealerSearchQuery('');
+    setDealerOpen(false);
   };
-
-  if (!isOpen) return null;
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount);
+      minimumFractionDigits: 0,
+    }).format(amount || 0);
+  };
+
+  const [dealerSearchQuery, setDealerSearchQuery] = useState('');
+  const [dealerOpen, setDealerOpen] = useState(false);
+
+  const filteredDealers = dealers.filter(dealer =>
+    dealer.dealer_name?.toLowerCase().includes(dealerSearchQuery.toLowerCase()) ||
+    dealer.employee_code?.toLowerCase().includes(dealerSearchQuery.toLowerCase())
+  );
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
-        <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-t-2xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <HandCoins className="w-6 h-6" />
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <HandCoins className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <CardTitle className="text-xl">Dealer Tip</CardTitle>
-              <p className="text-sm text-amber-100 mt-1">50% of chip value paid as cash to dealer</p>
+            <div className="flex flex-col">
+              <span>Dealer Tips</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Record dealer tips
+              </span>
             </div>
-          </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-        </CardHeader>
+          </DialogTitle>
+        </DialogHeader>
 
-        <CardContent className="p-6 space-y-6">
+        <div className="space-y-4 mt-4">
           {/* Dealer Selection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <User className="w-4 h-4" />
-              Select Dealer *
-            </Label>
-            {dealers.length === 0 ? (
-              <Alert className="border-amber-200 bg-amber-50">
-                <AlertDescription className="text-amber-700">
-                  No dealers found. Please add dealers first.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <ScrollArea className="h-[180px]">
-                <div className="grid grid-cols-2 gap-3">
-                  {dealers.map((dealer) => (
-                    <div
-                      key={dealer.dealer_id}
-                      onClick={() => setSelectedDealer(dealer)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selectedDealer?.dealer_id === dealer.dealer_id
-                          ? 'border-amber-500 bg-amber-50 shadow-md'
-                          : 'border-gray-200 hover:border-amber-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                          selectedDealer?.dealer_id === dealer.dealer_id 
-                            ? 'bg-gradient-to-br from-amber-500 to-orange-600' 
-                            : 'bg-gradient-to-br from-gray-400 to-gray-500'
-                        }`}>
-                          {dealer.dealer_name?.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 truncate">{dealer.dealer_name}</p>
-                          <p className="text-xs text-gray-500">{dealer.employee_code}</p>
-                        </div>
-                        {selectedDealer?.dealer_id === dealer.dealer_id && (
-                          <Check className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div className="space-y-2">
+            <Label>Select Dealer</Label>
+            <Popover open={dealerOpen} onOpenChange={setDealerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={dealerOpen}
+                  className="w-full justify-between h-14 text-left font-normal"
+                >
+                  {selectedDealer ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                        {selectedDealer.dealer_name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{selectedDealer.dealer_name}</p>
+                        {selectedDealer.employee_code && (
+                          <p className="text-xs text-muted-foreground">{selectedDealer.employee_code}</p>
                         )}
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    <span className="text-muted-foreground">Search dealer...</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput 
+                    placeholder="Search dealer..." 
+                    value={dealerSearchQuery}
+                    onValueChange={setDealerSearchQuery}
+                  />
+                  <CommandList>
+                    {filteredDealers.length === 0 ? (
+                      <CommandEmpty>No dealers found.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        <ScrollArea className="h-[280px]">
+                          {filteredDealers.map((dealer) => (
+                            <CommandItem
+                              key={dealer.dealer_id}
+                              value={dealer.dealer_id.toString()}
+                              onSelect={() => {
+                                setSelectedDealer(dealer);
+                                setDealerOpen(false);
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold flex-shrink-0">
+                                  {dealer.dealer_name?.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-foreground truncate">{dealer.dealer_name}</p>
+                                  {dealer.employee_code && (
+                                    <p className="text-xs text-muted-foreground">{dealer.employee_code}</p>
+                                  )}
+                                </div>
+                                {selectedDealer?.dealer_id === dealer.dealer_id && (
+                                  <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </ScrollArea>
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {selectedDealer && (
+              <div className="p-3 rounded-lg bg-muted/50 border border-border flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                  {selectedDealer.dealer_name?.charAt(0).toUpperCase()}
                 </div>
-              </ScrollArea>
+                <div>
+                  <p className="font-medium text-foreground">{selectedDealer.dealer_name}</p>
+                  {selectedDealer.employee_code && (
+                    <p className="text-xs text-muted-foreground">{selectedDealer.employee_code}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
@@ -190,7 +246,7 @@ const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
             <CardContent className="pt-5 pb-4">
               <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
                 <Coins className="w-4 h-4" />
-                Tip Chips Received *
+                Chips Received *
               </Label>
               
               <div className="grid grid-cols-4 gap-3">
@@ -207,7 +263,7 @@ const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
                     <Input
                       type="number"
                       min="0"
-                      placeholder="0"
+                      placeholder=""
                       value={chipBreakdown[chip.key] || ''}
                       onChange={(e) => handleChipChange(chip.key, e.target.value)}
                       className={`text-center text-lg font-bold h-12 border-2 ${chip.colorClass}`}
@@ -222,79 +278,41 @@ const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
           </Card>
 
           {/* Cash Percentage Selection */}
-          <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-green-200 shadow-md">
-            <CardContent className="pt-5 pb-4">
-              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-                <Wallet className="w-4 h-4" />
-                Cash Percentage to Dealer *
-              </Label>
-              
-              <div className="grid grid-cols-5 gap-2 mb-4">
-                {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(percentage => (
-                  <button
-                    key={percentage}
-                    type="button"
-                    onClick={() => setCashPercentage(percentage)}
-                    className={`h-12 rounded-lg border-2 font-bold text-sm transition-all ${
-                      cashPercentage === percentage
-                        ? 'border-green-500 bg-green-500 text-white shadow-lg'
-                        : 'border-green-200 bg-white text-green-700 hover:border-green-400 hover:bg-green-50'
-                    }`}
-                  >
-                    {percentage}%
-                  </button>
-                ))}
-              </div>
-              
-              <div className="flex items-center justify-center p-3 bg-green-100 rounded-lg">
-                <span className="text-sm font-medium text-green-800">
-                  Selected: <span className="font-bold">{cashPercentage}%</span> cash to dealer
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-900">Cash Percentage to Dealer</Label>
+            <div className="grid grid-cols-5 gap-2">
+              {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(percentage => (
+                <button
+                  key={percentage}
+                  type="button"
+                  onClick={() => setCashPercentage(percentage)}
+                  className={`h-12 rounded-lg border-2 font-bold text-sm transition-all ${
+                    cashPercentage === percentage
+                      ? 'border-green-500 bg-green-500 text-white shadow-lg'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50'
+                  }`}
+                >
+                  {percentage}%
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {/* Calculation Summary */}
-          <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 shadow-md">
-            <CardContent className="pt-5 pb-4 space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-amber-200">
-                <div className="flex items-center gap-2">
-                  <Coins className="w-5 h-5 text-amber-600" />
-                  <span className="text-gray-700 font-medium">Total Chip Value</span>
-                </div>
-                <span className="text-2xl font-black text-gray-900">
-                  {formatCurrency(calculateChipValue())}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-2 text-sm">
-                <span className="text-gray-600">Chips Returned to Inventory</span>
-                <span className="font-semibold text-gray-700">
-                  {formatCurrency(calculateChipValue())}
-                </span>
-              </div>
-
-              <Card className="bg-gradient-to-br from-emerald-100 to-green-100 border-emerald-300">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Wallet className="w-5 h-5 text-emerald-600" />
-                    <span className="text-emerald-800 font-bold">Cash Paid to Dealer ({cashPercentage}%)</span>
-                  </div>
-                  <span className="text-3xl font-black text-emerald-600">
-                    {formatCurrency(calculateDealerCash())}
-                  </span>
-                </CardContent>
-              </Card>
-            </CardContent>
-          </Card>
-
-          {/* Info Box */}
-          <Alert className="border-blue-200 bg-blue-50">
-            <AlertDescription className="text-blue-700 text-sm">
-              <strong>How it works:</strong> Player gives tip chips to dealer. The full chip value is returned 
-              to the inventory. {cashPercentage}% of the chip value is paid to the dealer as cash from the wallet.
-            </AlertDescription>
-          </Alert>
+          {/* Summary Section */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Chips returned:</span>
+              <span className="text-lg font-bold text-green-600">
+                +{formatCurrency(calculateChipValue())}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Cash to dealer ({cashPercentage}%):</span>
+              <span className="text-lg font-bold text-red-600">
+                -{formatCurrency(calculateDealerCash())}
+              </span>
+            </div>
+          </div>
 
           {/* Notes */}
           <div className="space-y-2">
@@ -307,52 +325,45 @@ const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
             />
           </div>
 
-          {/* Error/Success Messages */}
+          {/* Error */}
           {error && (
-            <Alert variant="destructive" className="border-red-200 bg-red-50">
-              <AlertDescription className="text-red-700">{error}</AlertDescription>
-            </Alert>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
+          {/* Success */}
           {success && (
-            <Alert className="border-emerald-200 bg-emerald-50">
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <AlertDescription className="text-emerald-700">{success}</AlertDescription>
-            </Alert>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+              <CheckCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{success}</span>
+            </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 h-12"
-            >
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <Button variant="outline" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button
-              type="button"
               onClick={handleSubmit}
               disabled={loading || !selectedDealer || calculateChipValue() <= 0}
-              className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg disabled:shadow-none"
+              className="flex-1"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Recording...
+                  Processing...
                 </>
               ) : (
-                <>
-                  <HandCoins className="w-4 h-4 mr-2" />
-                  Record Tip {calculateChipValue() > 0 && `• ${formatCurrency(calculateDealerCash())}`}
-                </>
+                "Record Tip"
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

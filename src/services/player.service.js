@@ -166,6 +166,21 @@ async createPlayer(data) {
       throw apiService.handleError(error);
     }
   }
+
+  // ✅ Toggle house player status
+  async toggleHousePlayer(playerId) {
+    try {
+      const token = this.getToken();
+      const response = await apiService.post(
+        `/players/${playerId}/toggle-house-player`,
+        {},
+        token
+      );
+      return response;
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
 }
 
 export default new PlayerService();

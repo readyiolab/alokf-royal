@@ -169,7 +169,7 @@ const SessionOverviewCard = ({
                 className="flex-1 h-8 text-xs border-red-300 text-red-600 hover:bg-red-50"
               >
                 <Power className="w-3 h-3 mr-1" />
-                Close Session
+                Close
               </Button>
             </div>
           </div>

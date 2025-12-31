@@ -22,7 +22,7 @@ export const useFloorManagerData = (session, hasActiveSession, token) => {
 
   // =================== FETCH ALL DATA ===================
   const fetchData = useCallback(async () => {
-    if (!hasActiveSession || !session?.session_id) {
+    if (!hasActiveSession || !session || (session.session_id === null || session.session_id === undefined)) {
       setLoading(false);
       return;
     }
@@ -42,7 +42,7 @@ export const useFloorManagerData = (session, hasActiveSession, token) => {
       
       const [tablesRes, waitlistRes, dealersRes, playersRes] = await Promise.all(apiCalls);
 
-      // ✅ PARSE TABLES
+      // ✅ PARSE TABLES - Handle all possible response formats
       let tablesList = [];
       if (Array.isArray(tablesRes)) {
         tablesList = tablesRes;
@@ -54,6 +54,10 @@ export const useFloorManagerData = (session, hasActiveSession, token) => {
         tablesList = tablesRes.data;
       } else if (tablesRes?.tables && Array.isArray(tablesRes.tables)) {
         tablesList = tablesRes.tables;
+      } else if (tablesRes?.success && tablesRes?.data && Array.isArray(tablesRes.data.tables)) {
+        tablesList = tablesRes.data.tables;
+      } else if (tablesRes?.success && tablesRes?.data && Array.isArray(tablesRes.data)) {
+        tablesList = tablesRes.data;
       }
       
       console.log('Tables API Response:', tablesRes);
@@ -84,6 +88,10 @@ export const useFloorManagerData = (session, hasActiveSession, token) => {
         dealersList = dealersRes.data;
       } else if (dealersRes?.dealers && Array.isArray(dealersRes.dealers)) {
         dealersList = dealersRes.dealers;
+      } else if (dealersRes?.success && dealersRes?.data && Array.isArray(dealersRes.data.dealers)) {
+        dealersList = dealersRes.data.dealers;
+      } else if (dealersRes?.success && dealersRes?.data && Array.isArray(dealersRes.data)) {
+        dealersList = dealersRes.data;
       }
       
       console.log('Dealers API Response:', dealersRes);
@@ -120,6 +128,11 @@ export const useFloorManagerData = (session, hasActiveSession, token) => {
     } catch (err) {
       setError(err.message || 'Failed to load data');
       console.error('Fetch Error:', err);
+      // On error, still set empty arrays to prevent stale data
+      setTables([]);
+      setWaitlist([]);
+      setDealers([]);
+      setAllPlayers([]);
     } finally {
       setLoading(false);
     }
@@ -127,7 +140,11 @@ export const useFloorManagerData = (session, hasActiveSession, token) => {
 
   // =================== INITIAL FETCH & AUTO-REFRESH ===================
   useEffect(() => {
-    if (!hasActiveSession || !session?.session_id) return;
+    // If no active session, set loading to false immediately
+    if (!hasActiveSession || !session || (session.session_id === null || session.session_id === undefined)) {
+      setLoading(false);
+      return;
+    }
 
     fetchData();
 

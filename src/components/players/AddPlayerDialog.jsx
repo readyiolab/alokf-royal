@@ -68,8 +68,13 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
       setLoading(true);
       // Include credit_limit if provided
       const playerData = {
-        ...formData,
-        credit_limit: formData.credit_limit ? parseFloat(formData.credit_limit) : 0
+        player_name: formData.player_name.trim(),
+        phone_number: formData.phone_number.trim() || null,
+        email: formData.email.trim() || null,
+        address: formData.address.trim() || null,
+        player_type: formData.player_type,
+        notes: formData.notes.trim() || null,
+        credit_limit: formData.credit_limit && formData.credit_limit.trim() ? parseFloat(formData.credit_limit) : 0
       };
       const newPlayer = await playerService.createPlayer(playerData);
       setSuccess('Player added successfully!');

@@ -11,4 +11,9 @@ export { default as ChipsInventoryCard } from './ChipsInventoryCard';
 export { default as OutstandingCreditCard } from './OutstandingCreditCard';
 export { default as TransactionHistoryTabs } from './TransactionHistoryTabs';
 export { default as AddFloatModal } from './AddFloatModal';
+export { default as ExportFloatChipsLogModal } from './ExportFloatChipsLogModal';
+export { default as ReversalDetailsModal } from './ReversalDetailsModal';
+export { default as TopUpFloatModal } from './TopUpFloatModal';
+export { default as ViewFloatModal } from './ViewFloatModal';
+export { default as CloseDayModal } from './CloseDayModal';
 

@@ -23,7 +23,7 @@ export const useFloorManager = () => {
   // ============================================
 
   const fetchAllData = useCallback(async () => {
-    if (!hasActiveSession || !session?.session_id) return;
+    if (!hasActiveSession || !session || (session.session_id === null || session.session_id === undefined)) return;
 
     setLoading(true);
     setError(null);

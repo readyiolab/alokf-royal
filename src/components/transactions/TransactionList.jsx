@@ -119,6 +119,11 @@ const ChipLedgerList = ({ transactions = [] }) => {
                   </td>
                   <td className="py-4 px-6">
                     <div className="font-semibold text-zinc-900">{playerName}</div>
+                    {t.created_by_full_name || t.created_by_name ? (
+                      <div className="text-xs text-blue-600 mt-1 font-medium">
+                        Processed by: {t.created_by_full_name || t.created_by_name}
+                      </div>
+                    ) : null}
                     {t.notes && <div className="text-xs text-zinc-500 mt-1">{t.notes}</div>}
                   </td>
                   <td className="py-4 px-6">

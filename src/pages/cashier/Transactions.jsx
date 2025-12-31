@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import CashierLayout from '../../components/layouts/CashierLayout';
-import { useSession } from '../../hooks/useSession';
+import { useSession } from '../../contexts/Sessioncontext'; // ✅ FIXED: Using context version (same as CashierLayout)
 import { useAuth } from '../../hooks/useAuth';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
@@ -15,11 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, Mail, Activity, Users } from 'lucide-react';
+import { Phone, Mail, Activity, Users, Clock, Wallet, TrendingDown, CreditCard, Coins, ArrowUp, Settings, Plus, Eye, ArrowDown } from 'lucide-react';
 
 // Services
 import playerService from '../../services/player.service';
@@ -35,7 +36,9 @@ import {
   ChipsInventoryCard,
   OutstandingCreditCard,
   TransactionHistoryTabs,
-  AddFloatModal,
+  TopUpFloatModal,
+  ViewFloatModal,
+  CloseDayModal,
 } from '../../components/cashier';
 
 // Transaction Forms
@@ -121,13 +124,16 @@ const getUniquePlayersCount = (transactions = []) =>
 
 const CashierTransactions = () => {
   const { toast } = useToast();
-  const { session, dashboard, loading, error, hasActiveSession, refreshSession } = useSession();
+  // ✅ FIXED: Using context version with correct property name
+  const { session, dashboard, loading, error, hasActiveSession, refresh: refreshSession } = useSession();
   const { token } = useAuth();
 
   // UI State
   const [activeForm, setActiveForm] = useState(null);
   const [showStartSessionModal, setShowStartSessionModal] = useState(false);
-  const [showAddFloatModal, setShowAddFloatModal] = useState(false);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [showViewFloatModal, setShowViewFloatModal] = useState(false);
+  const [showCloseDayModal, setShowCloseDayModal] = useState(false);
   const [showFloatHistoryModal, setShowFloatHistoryModal] = useState(false);
 
   // Special Action Modals
@@ -146,6 +152,21 @@ const CashierTransactions = () => {
   // Float History State
   const [floatHistory, setFloatHistory] = useState(null);
   const [loadingFloatHistory, setLoadingFloatHistory] = useState(false);
+
+  // ✅ FIXED: Compute isSessionActive - handle session_id === 0 as valid
+  // session_id can be 0 which is falsy in JS, so we need explicit checks
+  const isSessionActive = !!hasActiveSession && 
+                          session && 
+                          (session.session_id !== null && session.session_id !== undefined) && // ✅ Fixed: 0 is valid
+                          (session.is_closed === 0 || session.is_closed === false || session.is_closed === null || session.is_closed === undefined);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🎯 Transactions - hasActiveSession:', hasActiveSession, 'isSessionActive:', isSessionActive);
+    console.log('   - session:', session);
+    console.log('   - session?.session_id:', session?.session_id, 'type:', typeof session?.session_id);
+    console.log('   - session?.is_closed:', session?.is_closed, 'type:', typeof session?.is_closed);
+  }, [hasActiveSession, isSessionActive, session]);
 
   // ==========================================
   // DATA FETCHING
@@ -192,7 +213,7 @@ const CashierTransactions = () => {
   };
 
   const fetchFloatHistory = async () => {
-    if (!session?.session_id) return;
+    if (session?.session_id === null || session?.session_id === undefined) return;
 
     setLoadingFloatHistory(true);
     try {
@@ -233,10 +254,10 @@ const CashierTransactions = () => {
   }, [token, fetchPlayers]);
 
   useEffect(() => {
-    if (!hasActiveSession) {
+    if (!isSessionActive) {
       setActiveForm(null);
     }
-  }, [hasActiveSession]);
+  }, [isSessionActive]);
 
   // ==========================================
   // HANDLERS
@@ -273,6 +294,21 @@ const CashierTransactions = () => {
   const handleTransactionComplete = () => {
     setActiveForm(null);
     refreshSession();
+  };
+
+  const handleSessionStarted = async () => {
+    console.log('=== handleSessionStarted CALLED (Transactions) ===');
+    setShowStartSessionModal(false);
+    setShowTopUpModal(false);
+    setShowViewFloatModal(false);
+    setShowCloseDayModal(false);
+    
+    // Wait for backend to process, then refresh context
+    setTimeout(async () => {
+      console.log('=== Refreshing session context (Transactions) ===');
+      await refreshSession();
+      console.log('=== Session context refreshed (Transactions) ===');
+    }, 1500);
   };
 
   // ==========================================
@@ -339,7 +375,6 @@ const CashierTransactions = () => {
   }
 
   // ✅ Only show error for real errors, not for "no session" or "session closed"
-  // When session is closed or no session, we let the page render so user can start a new session
   if (error && !error.includes('No session') && !error.includes('No active session')) {
     return (
       <CashierLayout>
@@ -359,9 +394,9 @@ const CashierTransactions = () => {
 
   return (
     <CashierLayout>
-      <div className="max-w-7xl mx-auto space-y-6 pb-10">
+      <div className="space-y-6 p-6" key={`transactions-${session?.session_id ?? 'no-session'}-${hasActiveSession}`}>
         {/* No Session Warning */}
-        {(!hasActiveSession || !session) && (
+        {!isSessionActive && (
           <Alert className="bg-yellow-50 border-2 border-yellow-300">
             <AlertCircle className="w-5 h-5 text-yellow-600" />
             <AlertDescription className="ml-2 py-1 text-yellow-700 font-medium">
@@ -370,33 +405,177 @@ const CashierTransactions = () => {
           </Alert>
         )}
 
-        {/* ============ SECTION 1: OVERVIEW CARDS ============ */}
-        <div className="space-y-3">
-          <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900">Session Overview</h2>
+        {/* ============ SECTION 1: DASHBOARD CARDS ============ */}
+        <div className="space-y-6">
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* DAILY SESSION Card */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-medium text-gray-700">DAILY SESSION</CardTitle>
+                <Clock className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-2xl font-bold text-black">
+                  {formatCurrency(dashboard?.wallets?.primary?.current || 0)}
+                </div>
+                <p className="text-xs text-gray-600">AVAILABLE FLOAT</p>
+                
+                {/* ✅ FIXED: Render buttons based on session status - same logic as Dashboard */}
+                {isSessionActive ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 flex-col justify-between  ">
+                      <Button
+                        onClick={() => setShowTopUpModal(true)}
+                        variant="outline"
+                        className="flex-1 text-xs h-8 border-gray-300 hover:bg-gray-50"
+                        size="sm"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Top Up
+                      </Button>
+                      <Button
+                        onClick={() => setShowViewFloatModal(true)}
+                        variant="outline"
+                        className="flex-1 text-xs h-8 border-gray-300 hover:bg-gray-50"
+                        size="sm"
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        View Float
+                      </Button>
+                    </div>
+                     <Button
+                       onClick={() => setShowCloseDayModal(true)}
+                       variant="outline"
+                       className="w-full text-xs h-8 border-gray-300 hover:bg-gray-50"
+                       size="sm"
+                     >
+                       <ArrowDown className="w-3 h-3 mr-1" />
+                       Close
+                     </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => setShowStartSessionModal(true)}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm h-8"
+                    size="sm"
+                  >
+                    <ArrowUp className="w-3 h-3 mr-1" />
+                    Start New Day
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <SessionOverviewCard
-              session={session}
-              dashboard={dashboard}
-              hasActiveSession={hasActiveSession}
-              onOpenFloatHistory={handleOpenFloatHistory}
-              onAddFloat={() => setShowAddFloatModal(true)}
-              onStartSession={() => setShowStartSessionModal(true)}
-              onCloseSession={handleCloseSession}
-              formatCurrency={formatCurrency}
-            />
+            {/* TODAY'S MONEY Card */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-medium text-gray-700">TODAY'S MONEY</CardTitle>
+                <Wallet className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Cash in Hand</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.secondary?.current || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Online Money</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.online_deposits || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">SBI</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.sbi_deposits || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">HDFC</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.hdfc_deposits || 0)}</span>
+                  </div>
+                </div>
+                {!isSessionActive && (
+                  <p className="text-xs text-gray-500 mt-2">Day closed - Start new day to see stats</p>
+                )}
+              </CardContent>
+            </Card>
 
-            <CashOutCard dashboard={dashboard} formatCurrency={formatCurrency} />
+            {/* CASH TAKEN OUT Card */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-medium text-gray-700">CASH TAKEN OUT</CardTitle>
+                <TrendingDown className="w-4 h-4 text-red-500" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="text-2xl font-bold text-black">
+                  {formatCurrency((dashboard?.totals?.withdrawals || 0) + (dashboard?.totals?.expenses || 0))}
+                </div>
+                <div className="space-y-1 pt-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Payouts</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.withdrawals || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Dealer Tips (Cash)</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.dealer_tips || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Player Expenses (Vendors)</span>
+                    <span className="font-semibold text-black">{formatCurrency(0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Club Expenses</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.club_expenses || 0)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-            <ChipsInventoryCard dashboard={dashboard} formatCurrency={formatCurrency} />
+            {/* OUTSTANDING CREDIT Card */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-medium text-gray-700">OUTSTANDING CREDIT</CardTitle>
+                <CreditCard className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="text-2xl font-bold text-orange-600">
+                  {formatCurrency(dashboard?.outstanding_credit || 0)}
+                </div>
+                <p className="text-xs text-gray-600">
+                  {(dashboard?.outstanding_credit || 0) > 0 ? "Pending settlements" : "All settled"}
+                </p>
+              </CardContent>
+            </Card>
 
-            <OutstandingCreditCard dashboard={dashboard} formatCurrency={formatCurrency} />
+            {/* CHIPS INVENTORY Card */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xs font-medium text-gray-700">CHIPS INVENTORY</CardTitle>
+                <Settings className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">Opening</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-black">{(dashboard?.chip_inventory?.opening?.total_count || 0)} chips</span>
+                      <span className="text-sm font-semibold text-black">Value {formatCurrency(dashboard?.chip_inventory?.opening?.total_value || 0)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">With Cashier</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-black">{(dashboard?.chip_inventory?.current_in_hand?.total_count || 0)} chips</span>
+                      <span className="text-sm font-semibold text-black">Value {formatCurrency(dashboard?.chip_inventory?.current_in_hand?.total_value || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         {/* ============ SECTION 2: QUICK ACTIONS ============ */}
         <QuickActionsGrid
-          hasActiveSession={hasActiveSession}
+          hasActiveSession={isSessionActive}
           onSelectTransaction={setActiveForm}
           onRakeback={() => setShowRakebackModal(true)}
           onDealerTip={() => setShowDealerTipModal(true)}
@@ -404,29 +583,35 @@ const CashierTransactions = () => {
           onClubExpense={() => setShowClubExpenseModal(true)}
         />
 
-        {/* ============ SECTION 3: TRANSACTION HISTORY ============ */}
-        <TransactionHistoryTabs
-          allTransactions={allTransactions}
-          cashbookTransactions={cashbookTransactions}
-          chipLedgerTransactions={chipLedgerTransactions}
-          creditRegisterTransactions={creditRegisterTransactions}
-          players={players}
-          uniquePlayers={uniquePlayers}
-          onViewPlayer={handleViewPlayer}
-          formatCurrency={formatCurrency}
-        />
+        
       </div>
 
       {/* ============ MODALS ============ */}
 
       {/* Transaction Form Modal */}
       <Dialog open={!!activeForm} onOpenChange={(open) => !open && setActiveForm(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden border-0 bg-white shadow-2xl rounded-2xl">
-          <DialogHeader className="p-6 pb-4 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white sticky top-0 z-10">
-            <DialogTitle className="text-xl font-bold">{activeTransaction?.name}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className={`sm:max-w-2xl max-h-[90vh] ${activeForm === 'buy-in' ? 'p-0 overflow-hidden border-0 bg-white shadow-2xl rounded-2xl' : 'bg-card border-border'}`}>
+          {activeForm === 'issue-credit' ? (
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Coins className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex flex-col">
+                  <span>Issue Credit</span>
+                  <span className="text-xs text-muted-foreground font-normal">
+                    Give credit to a player in mixed chips
+                  </span>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+          ) : activeForm !== 'buy-in' ? (
+            <DialogHeader className="p-6 pb-4 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white sticky top-0 z-10">
+              <DialogTitle className="text-xl font-bold">{activeTransaction?.name}</DialogTitle>
+            </DialogHeader>
+          ) : null}
 
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
+          <div className={`${activeForm === 'buy-in' ? 'p-6' : activeForm === 'issue-credit' ? 'p-6' : 'p-6'} overflow-y-auto max-h-[calc(90vh-100px)]`}>
             {ActiveFormComponent && (
               <ActiveFormComponent onSuccess={handleTransactionComplete} onCancel={() => setActiveForm(null)} />
             )}
@@ -438,18 +623,27 @@ const CashierTransactions = () => {
       <StartSessionModal
         open={showStartSessionModal}
         onOpenChange={setShowStartSessionModal}
-        onSuccess={refreshSession}
+        onSuccess={handleSessionStarted}
       />
 
-      {/* Add Float Modal */}
-      <AddFloatModal
-        isOpen={showAddFloatModal}
-        onClose={() => setShowAddFloatModal(false)}
-        onSuccess={() => {
-          setShowAddFloatModal(false);
-          refreshSession();
-        }}
-        sessionId={session?.session_id}
+        {/* Top Up Float Modal */}
+        <TopUpFloatModal
+          open={showTopUpModal}
+          onOpenChange={setShowTopUpModal}
+          onSuccess={handleSessionStarted}
+        />
+
+      {/* View Float Modal */}
+      <ViewFloatModal
+        open={showViewFloatModal}
+        onOpenChange={setShowViewFloatModal}
+      />
+
+      {/* Close Day Modal */}
+      <CloseDayModal
+        open={showCloseDayModal}
+        onOpenChange={setShowCloseDayModal}
+        onSuccess={handleSessionStarted}
       />
 
       {/* Special Action Modals */}

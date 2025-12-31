@@ -2,12 +2,13 @@
 // Player Expense - Player uses chips for food, drinks, tips, etc.
 
 import React, { useState } from 'react';
-import { X, UtensilsCrossed, Coffee, Heart, MoreHorizontal, Coins, Check, Loader2, CheckCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
-import { Alert, AlertDescription } from '../ui/alert';
+import { UtensilsCrossed, Coffee, Heart, MoreHorizontal, Coins, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { cn } from '@/lib/utils';
 import expenseService from '../../services/expense.service';
 
 const EXPENSE_CATEGORIES = [
@@ -92,38 +93,40 @@ const PlayerExpenseModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
     setSuccess('');
   };
 
-  if (!isOpen) return null;
-
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount);
+      minimumFractionDigits: 0,
+    }).format(amount || 0);
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
-        <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-t-2xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <UtensilsCrossed className="w-6 h-6" />
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <UtensilsCrossed className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <CardTitle className="text-xl">Player Expense</CardTitle>
-              <p className="text-sm text-rose-100 mt-1">Chips returned for food, drinks, tips, etc.</p>
+            <div className="flex flex-col">
+              <span>Player Expense</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                Record player expense
+              </span>
             </div>
-          </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-        </CardHeader>
+          </DialogTitle>
+        </DialogHeader>
 
-        <CardContent className="p-6 space-y-6">
+        <div className="space-y-4 mt-4">
           {/* Category Selection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold text-gray-700">Expense Category *</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-900">Expense Category</Label>
             <div className="grid grid-cols-2 gap-3">
               {EXPENSE_CATEGORIES.map((cat) => {
                 const IconComponent = cat.icon;
@@ -175,7 +178,7 @@ const PlayerExpenseModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
                     <Input
                       type="number"
                       min="0"
-                      placeholder="0"
+                      placeholder=""
                       value={chipBreakdown[chip.key] || ''}
                       onChange={(e) => handleChipChange(chip.key, e.target.value)}
                       className={`text-center text-lg font-bold h-12 border-2 ${chip.colorClass}`}
@@ -203,7 +206,7 @@ const PlayerExpenseModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
 
           {/* Description */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">Description (Optional)</Label>
+            <Label className="text-sm font-medium text-gray-900">Description (Optional)</Label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -212,52 +215,45 @@ const PlayerExpenseModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
             />
           </div>
 
-          {/* Error/Success Messages */}
+          {/* Error */}
           {error && (
-            <Alert variant="destructive" className="border-red-200 bg-red-50">
-              <AlertDescription className="text-red-700">{error}</AlertDescription>
-            </Alert>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
+          {/* Success */}
           {success && (
-            <Alert className="border-emerald-200 bg-emerald-50">
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <AlertDescription className="text-emerald-700">{success}</AlertDescription>
-            </Alert>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+              <CheckCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{success}</span>
+            </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 h-12"
-            >
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <Button variant="outline" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
             <Button
-              type="button"
               onClick={handleSubmit}
               disabled={loading || !category || calculateChipValue() <= 0}
-              className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 shadow-lg disabled:shadow-none"
+              className="flex-1"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Recording...
+                  Processing...
                 </>
               ) : (
-                <>
-                  <UtensilsCrossed className="w-4 h-4 mr-2" />
-                  Record Expense {calculateChipValue() > 0 && `• ${formatCurrency(calculateChipValue())}`}
-                </>
+                "Record Expense"
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

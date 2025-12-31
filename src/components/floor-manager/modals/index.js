@@ -10,4 +10,7 @@ export { default as AddWaitlistModal } from './AddWaitlistModal';
 export { default as SeatFromWaitlistModal } from './SeatFromWaitlistModal';
 export { default as ExtendCallTimeModal } from './ExtendCallTimeModal';
 export { default as AddDealerModal } from './AddDealerModal';
+export { default as TransferPlayerModal } from './TransferPlayerModal';
+
+export { default as RakebackModal } from './RakebackModal';
 

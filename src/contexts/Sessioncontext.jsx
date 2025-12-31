@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import adminService from '../services/admin.service';
 import cashierService from '../services/cashier.service';
@@ -14,11 +14,15 @@ export const useSession = () => {
 };
 
 export const SessionProvider = ({ children }) => {
-  const { token, user } = useAuth(); // ✅ Get user to check role
+  const { token, user } = useAuth();
   
   const [sessionStatus, setSessionStatus] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [sessionError, setSessionError] = useState('');
+  
+  // ✅ ADD: Force update counter to trigger re-renders
+  const [updateCounter, setUpdateCounter] = useState(0);
 
   // Check session status function
   const checkSessionStatus = useCallback(async () => {
@@ -26,6 +30,7 @@ export const SessionProvider = ({ children }) => {
       console.log('❌ No token available, skipping session check');
       setIsLoadingSession(false);
       setSessionStatus(null);
+      setDashboard(null);
       return null;
     }
 
@@ -35,53 +40,71 @@ export const SessionProvider = ({ children }) => {
     
     try {
       let response;
+      let dashboardResponse = null;
       
-      // ✅ FIX: Support admin, cashier, AND floor_manager roles
       if (user?.role === 'admin') {
         console.log('📞 Calling ADMIN session status endpoint');
         response = await adminService.getCurrentSessionStatus();
-      } else if (user?.role === 'cashier') {
+      } else if (user?.role === 'cashier' || user?.role === 'floor_manager') {
         console.log('📞 Calling CASHIER session status endpoint');
-        response = await cashierService.getTodaySession();
         
-        // ✅ Handle response format from getTodaySession
+        // ✅ Fetch both session AND dashboard
+        const [sessionRes, dashRes] = await Promise.all([
+          cashierService.getTodaySession(),
+          cashierService.getDashboard().catch(() => null)
+        ]);
+        
+        console.log('📦 Raw sessionRes:', JSON.stringify(sessionRes, null, 2));
+        console.log('📦 Raw sessionRes.data:', JSON.stringify(sessionRes?.data, null, 2));
+        
+        response = sessionRes;
+        dashboardResponse = dashRes;
+        
+        // Handle response format from getTodaySession
         if (response?.success && response?.data) {
-          // Extract the has_active_session and session from response
           const { has_active_session, session } = response.data;
+          console.log('🔍 Extracted has_active_session:', has_active_session, 'type:', typeof has_active_session);
+          console.log('🔍 Extracted session:', session);
+          console.log('🔍 Session is_closed:', session?.is_closed, 'type:', typeof session?.is_closed);
+          
           response = {
             has_active_session: has_active_session,
             session: session
           };
         }
-      } else if (user?.role === 'floor_manager') {
-        // ✅ NEW: Floor manager uses cashier session endpoint
-        console.log('📞 Calling CASHIER session status endpoint (for Floor Manager)');
-        response = await cashierService.getTodaySession();
         
-        // ✅ Handle response format from getTodaySession
-        if (response?.success && response?.data) {
-          const { has_active_session, session } = response.data;
-          response = {
-            has_active_session: has_active_session,
-            session: session
-          };
+        // ✅ Set dashboard data
+        if (dashboardResponse?.success && dashboardResponse?.data) {
+          console.log('✅ Dashboard data received');
+          setDashboard(dashboardResponse.data);
+        } else {
+          setDashboard(null);
         }
       } else {
-        // ✅ Better error message with actual role
         throw new Error(`Unsupported user role: ${user?.role || 'unknown'}`);
       }
       
-      
-      
-      // ✅ Handle both formats: {has_active_session, session} or {success, data: {has_active_session, session}}
       const statusData = response?.has_active_session !== undefined 
         ? response 
         : (response?.data || response);
       
+      console.log('📊 Setting sessionStatus:', statusData);
+      console.log('📊 has_active_session value:', statusData?.has_active_session, 'type:', typeof statusData?.has_active_session);
+      
+      // ✅ IMPORTANT: Set state and force update
       setSessionStatus(statusData);
       setSessionError('');
       
-      if (statusData?.has_active_session) {
+      // ✅ Force update counter to trigger re-renders
+      setUpdateCounter(prev => prev + 1);
+      
+      const isActive = statusData?.has_active_session === true || 
+                       statusData?.has_active_session === 'true' || 
+                       statusData?.has_active_session === 1 || 
+                       statusData?.has_active_session === '1';
+      console.log('📊 Computed isActive:', isActive);
+      
+      if (isActive) {
         console.log('🟢 Active session found!');
         console.log('Session ID:', statusData.session?.session_id);
       } else {
@@ -93,11 +116,22 @@ export const SessionProvider = ({ children }) => {
       console.error('❌ Session check error:', error);
       setSessionError('Failed to check session status');
       setSessionStatus({ has_active_session: false });
+      setDashboard(null);
+      setUpdateCounter(prev => prev + 1);
       return null;
     } finally {
       setIsLoadingSession(false);
     }
   }, [token, user]);
+
+  // ✅ Refresh function (alias for checkSessionStatus)
+  const refresh = useCallback(async () => {
+    console.log('🔃 REFRESH called');
+    const result = await checkSessionStatus();
+    // Force update after refresh
+    setUpdateCounter(prev => prev + 1);
+    return result;
+  }, [checkSessionStatus]);
 
   // Open session function
   const openSession = useCallback(async (floatAmount) => {
@@ -112,13 +146,14 @@ export const SessionProvider = ({ children }) => {
       const response = await adminService.openSession(floatAmount);
       console.log('✅ Session open API response:', JSON.stringify(response, null, 2));
       
-      // Wait for backend to process
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Refresh session status
       console.log('🔄 Refreshing session status after opening...');
       const newStatus = await checkSessionStatus();
       console.log('📊 New status after opening:', newStatus);
+      
+      // Force update
+      setUpdateCounter(prev => prev + 1);
       
       return response;
     } catch (error) {
@@ -143,13 +178,14 @@ export const SessionProvider = ({ children }) => {
       const response = await adminService.closeSession();
       console.log('✅ Session close API response:', JSON.stringify(response, null, 2));
       
-      // Wait for backend to process
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Refresh session status
       console.log('🔄 Refreshing session status after closing...');
       const newStatus = await checkSessionStatus();
       console.log('📊 New status after closing:', newStatus);
+      
+      // Force update
+      setUpdateCounter(prev => prev + 1);
       
       return response;
     } catch (error) {
@@ -167,10 +203,8 @@ export const SessionProvider = ({ children }) => {
     console.log('🔄 SessionProvider Effect - User:', user?.username, '- Role:', user?.role);
     
     if (token && user) {
-      // Initial check
       checkSessionStatus();
       
-      // Auto-refresh every 30 seconds
       const interval = setInterval(() => {
         console.log('⏰ Auto-refreshing session status...');
         checkSessionStatus();
@@ -180,22 +214,41 @@ export const SessionProvider = ({ children }) => {
     } else {
       setIsLoadingSession(false);
       setSessionStatus(null);
+      setDashboard(null);
     }
   }, [token, user, checkSessionStatus]);
 
   
-  const value = {
-    sessionStatus,
-    isLoadingSession,
-    sessionError,
-    checkSessionStatus,
-    openSession,
-    closeSession,
-    // Convenience aliases
-    loading: isLoadingSession,
-    session: sessionStatus?.session,
-    hasActiveSession: sessionStatus?.has_active_session || false,
-  };
+  // ✅ CRITICAL: Include updateCounter in dependencies to force context updates
+  const value = useMemo(() => {
+    // Compute hasActiveSession more robustly
+    const hasActiveSessionValue = sessionStatus?.has_active_session === true || 
+                                   sessionStatus?.has_active_session === 'true' || 
+                                   sessionStatus?.has_active_session === 1 || 
+                                   sessionStatus?.has_active_session === '1';
+    
+    const contextValue = {
+      sessionStatus,
+      isLoadingSession,
+      sessionError,
+      checkSessionStatus,
+      openSession,
+      closeSession,
+      // Convenience aliases
+      loading: isLoadingSession,
+      session: sessionStatus?.session,
+      hasActiveSession: hasActiveSessionValue,
+      dashboard,
+      refresh,
+      refreshSession: refresh,
+      // ✅ Add updateCounter so consumers know when to re-render
+      _updateCounter: updateCounter,
+    };
+    
+    console.log('🔄 Context value object created - hasActiveSession:', hasActiveSessionValue, 'sessionStatus?.has_active_session:', sessionStatus?.has_active_session, 'updateCounter:', updateCounter);
+    
+    return contextValue;
+  }, [sessionStatus, isLoadingSession, sessionError, checkSessionStatus, openSession, closeSession, dashboard, refresh, updateCounter]);
 
   return (
     <SessionContext.Provider value={value}>

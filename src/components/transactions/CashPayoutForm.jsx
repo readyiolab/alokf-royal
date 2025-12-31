@@ -7,7 +7,9 @@ import cashierService from "../../services/cashier.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,15 +35,16 @@ import {
   Search, 
   AlertCircle, 
   Plus, 
-  Coins, 
+  
   User, 
   ChevronsUpDown, 
   Check, 
-  Banknote, 
-  CreditCard, 
+  
   ArrowRight,
   Wallet,
-  Phone
+  
+  ShieldAlert,
+  Home
 } from "lucide-react";
 
 export const CashPayoutForm = ({ onSuccess, onCancel }) => {
@@ -84,6 +87,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     chips_10000: 0,
   });
 
+  // House player states
+  const [selectedPlayerData, setSelectedPlayerData] = useState(null);
+  const [ceoPermissionConfirmed, setCeoPermissionConfirmed] = useState(false);
+  const [showCeoPermissionModal, setShowCeoPermissionModal] = useState(false);
+
   // Load players on mount
   useEffect(() => {
     if (token) {
@@ -107,7 +115,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   const availableFloat = dashboard?.wallets?.total?.available ?? 0;
 
   useEffect(() => {
-    if (selectedPlayerId && token) {
+    if ((selectedPlayerId !== null && selectedPlayerId !== undefined) && token) {
       fetchChipBalance(selectedPlayerId);
     } else {
       setChipBalance(null);
@@ -150,9 +158,10 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     }
   };
 
-  const handleSelectPlayer = (player) => {
+  const handleSelectPlayer = async (player) => {
     selectPlayer(player);
     setSelectedPlayerId(player.player_id);
+    setSelectedPlayerData(player);
     setSearchQuery(player.player_name);
     setFormData(prev => ({
       ...prev,
@@ -160,6 +169,23 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       phone_number: player.phone_number || "",
     }));
     setOpen(false);
+    
+    // Reset CEO permission when player changes
+    setCeoPermissionConfirmed(false);
+    
+    // Fetch full player data to check house player status
+    try {
+      const fullPlayerData = await playerService.getPlayerById(player.player_id);
+      const playerInfo = fullPlayerData?.data || fullPlayerData;
+      setSelectedPlayerData(playerInfo);
+      
+      // If house player, show permission modal
+      if (playerInfo?.is_house_player === 1 || playerInfo?.is_house_player === true) {
+        setShowCeoPermissionModal(true);
+      }
+    } catch (err) {
+      console.error("Error fetching player data:", err);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -180,6 +206,14 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       return;
     }
 
+    // Check if house player requires CEO permission
+    const isHousePlayer = selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true;
+    if (isHousePlayer && !ceoPermissionConfirmed) {
+      setError("CEO permission required for house players");
+      setShowCeoPermissionModal(true);
+      return;
+    }
+
     // ✅ REMOVED: Float check - let backend handle it
     // The backend will create the transaction regardless of float
     // Float is just cashier's working capital tracking
@@ -196,6 +230,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         chips_amount: totalValue,
         chip_breakdown: chipsReceived,
         notes: formData.notes.trim() || null,
+        ceo_permission_confirmed: isHousePlayer ? ceoPermissionConfirmed : undefined,
       });
 
       // Refresh session to update wallet balances
@@ -283,35 +318,31 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-6">
+    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-5">
       {/* Available Float Badge */}
-      <Card className="bg-gradient-to-r from-slate-50 to-gray-100 border-slate-200">
-        <CardContent className="p-4 flex justify-between items-center">
+      <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-slate-600" />
-            <span className="text-sm font-medium text-gray-600">Available Float</span>
+            <Wallet className="h-5 w-5 text-success" />
+            <span className="text-sm text-muted-foreground">Deposit Cash</span>
           </div>
-          <span className="text-2xl font-black text-slate-800">{formatCurrency(availableFloat)}</span>
-        </CardContent>
-      </Card>
+          <span className="font-mono font-bold text-xl text-success">
+            ₹{availableFloat.toLocaleString("en-IN")}
+          </span>
+        </div>
+      </div>
 
       {/* ✅ Warning if payout exceeds float - but still allow transaction */}
       {netCashPayout > availableFloat && totalValue > 0 && (
-        <Alert className="border-orange-300 bg-orange-50">
-          <AlertCircle className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-800">
-            <strong>Low Float Warning:</strong> This payout (₹{netCashPayout.toLocaleString()}) exceeds available float (₹{availableFloat.toLocaleString()}). 
-            <br/>Transaction will proceed, but consider adding ₹{(netCashPayout - availableFloat).toLocaleString()} float soon.
-          </AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 text-warning text-sm border border-warning/20">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>Low Float Warning: This payout (₹{netCashPayout.toLocaleString()}) exceeds available float (₹{availableFloat.toLocaleString()}). Transaction will proceed, but consider adding ₹{(netCashPayout - availableFloat).toLocaleString()} float soon.</span>
+        </div>
       )}
 
       {/* Player Search with Command */}
-      <div className="space-y-3">
-        <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-          <User className="w-4 h-4" />
-          Select Player *
-        </Label>
+      <div className="space-y-2">
+        <Label>Player</Label>
         
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
@@ -321,7 +352,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
               aria-expanded={open}
               className="w-full justify-between h-14 text-left font-normal bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300"
             >
-              {selectedPlayerId && formData.player_name ? (
+              {(selectedPlayerId !== null && selectedPlayerId !== undefined) && formData.player_name ? (
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-white text-sm font-bold">
                     {formData.player_name.charAt(0).toUpperCase()}
@@ -404,152 +435,310 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       </div>
 
       {/* Player Balance Info */}
-      {selectedPlayerId && loadingBalance && (
-        <div className="flex items-center gap-2 text-gray-500 py-3 px-4 bg-gray-50 rounded-lg">
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && loadingBalance && (
+        <div className="flex items-center gap-2 text-muted-foreground py-3 px-4 bg-muted/50 rounded-lg">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-sm">Loading player info...</span>
         </div>
       )}
       
-      {selectedPlayerId && chipBalance && !loadingBalance && (
-        <div className="grid grid-cols-2 gap-3">
-          
-          {outstandingCredit > 0 && (
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-              <CardContent className="p-4 text-center">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <CreditCard className="w-4 h-4 text-orange-600" />
-                  <p className="text-xs text-orange-600 font-medium">Outstanding Credit</p>
-                </div>
-                <p className="text-xl font-bold text-orange-800">{formatCurrency(outstandingCredit)}</p>
-              </CardContent>
-            </Card>
-          )}
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && chipBalance && !loadingBalance && (
+        <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
+          <p className="text-base font-semibold text-foreground">{formData.player_name}</p>
+          <div className="grid gap-4 grid-cols-2">
+            <div>
+              <span className="text-sm text-muted-foreground block mb-1">Credit</span>
+              <p className={cn(
+                "font-mono font-bold text-xl",
+                outstandingCredit > 0 ? "text-destructive" : "text-[hsl(142,71%,35%)]"
+              )}>
+                ₹{outstandingCredit.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground block mb-1">Stored Balance</span>
+              <p className="font-mono font-bold text-xl text-[hsl(142,71%,35%)]">
+                ₹0
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Chip Breakdown Input */}
-      {selectedPlayerId && (
-        <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200 shadow-md">
-          <CardContent className="pt-5 pb-4">
-            <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-              <Coins className="w-4 h-4" />
-              Chips Received from Player *
-            </Label>
-            
-            <div className="grid grid-cols-4 gap-3">
-              {[
-                { key: 'chips_100', value: 100, colorClass: 'text-red-600 border-red-200 focus:border-red-400 bg-red-50', label: '₹100' },
-                { key: 'chips_500', value: 500, colorClass: 'text-green-600 border-green-200 focus:border-green-400 bg-green-50', label: '₹500' },
-                { key: 'chips_5000', value: 5000, colorClass: 'text-blue-600 border-blue-200 focus:border-blue-400 bg-blue-50', label: '₹5K' },
-                { key: 'chips_10000', value: 10000, colorClass: 'text-purple-600 border-purple-200 focus:border-purple-400 bg-purple-50', label: '₹10K' }
-              ].map(chip => (
-                <div key={chip.key} className="text-center">
-                  <div className={`text-xs font-bold mb-2 ${chip.colorClass.split(' ')[0]}`}>
-                    {chip.label}
-                  </div>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={chipsReceived[chip.key] || ''}
-                    onChange={(e) => handleChipCountChange(chip.key, e.target.value)}
-                    className={`text-center text-lg font-bold h-12 border-2 ${chip.colorClass}`}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {formatCurrency((parseInt(chipsReceived[chip.key]) || 0) * chip.value)}
-                  </p>
-                </div>
-              ))}
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && (
+        <div className="p-5 rounded-xl bg-gradient-to-b from-muted/60 to-muted/30 border border-border space-y-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-foreground">Chips Received</p>
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-success/20 text-success">
+              {Object.values(chipsReceived).reduce((sum, val) => sum + (parseInt(val) || 0), 0)} chips = ₹{totalValue.toLocaleString("en-IN")}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-[hsl(340,82%,52%)]">₹100 chips</Label>
+              <Input
+                type="number"
+                min="0"
+                value={chipsReceived.chips_100 || ''}
+                onChange={(e) => handleChipCountChange('chips_100', e.target.value)}
+                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
+                placeholder="0"
+              />
+              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_100) || 0) * 100).toLocaleString("en-IN")}</span>
             </div>
-            
-            {/* Total Display */}
-            <div className="mt-5 pt-4 border-t border-slate-200 flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-600">Total Chips</span>
-              <span className={`text-3xl font-black ${totalValue > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                {formatCurrency(totalValue)}
-              </span>
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-[hsl(210,100%,56%)]">₹500 chips</Label>
+              <Input
+                type="number"
+                min="0"
+                value={chipsReceived.chips_500 || ''}
+                onChange={(e) => handleChipCountChange('chips_500', e.target.value)}
+                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
+                placeholder="0"
+              />
+              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_500) || 0) * 500).toLocaleString("en-IN")}</span>
             </div>
-          </CardContent>
-        </Card>
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-[hsl(145,63%,42%)]">₹5,000 chips</Label>
+              <Input
+                type="number"
+                min="0"
+                value={chipsReceived.chips_5000 || ''}
+                onChange={(e) => handleChipCountChange('chips_5000', e.target.value)}
+                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
+                placeholder="0"
+              />
+              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_5000) || 0) * 5000).toLocaleString("en-IN")}</span>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-[hsl(280,70%,55%)]">₹10,000 chips</Label>
+              <Input
+                type="number"
+                min="0"
+                value={chipsReceived.chips_10000 || ''}
+                onChange={(e) => handleChipCountChange('chips_10000', e.target.value)}
+                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
+                placeholder="0"
+              />
+              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_10000) || 0) * 10000).toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Settlement Preview */}
-      {totalValue > 0 && selectedPlayerId && (
-        <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200 shadow-md">
-          <CardContent className="pt-5 pb-4 space-y-3">
-            <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Banknote className="w-4 h-4" />
-              Payout Calculation
-            </Label>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Chips Returned</span>
-                <span className="font-semibold">{formatCurrency(totalValue)}</span>
-              </div>
-              {creditToSettle > 0 && (
-                <div className="flex justify-between text-sm text-orange-600">
-                  <span className="flex items-center gap-1">
-                    <CreditCard className="w-3 h-3" />
-                    Auto-Settle Credit
-                  </span>
-                  <span className="font-semibold">-{formatCurrency(creditToSettle)}</span>
-                </div>
-              )}
-              <div className="flex justify-between pt-3 border-t border-emerald-200">
-                <span className="font-bold text-gray-800 flex items-center gap-2">
-                  <ArrowRight className="w-4 h-4" />
-                  Cash to Pay
-                </span>
-                <span className="text-3xl font-black text-emerald-600">{formatCurrency(netCashPayout)}</span>
-              </div>
+      {totalValue > 0 && (selectedPlayerId !== null && selectedPlayerId !== undefined) && (
+        <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
+          <p className="text-sm font-medium text-foreground">Payout Breakdown</p>
+          
+          {/* Credit settlement first */}
+          {creditToSettle > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Credit to settle</span>
+              <span className="font-mono font-semibold text-destructive">
+                -₹{creditToSettle.toLocaleString("en-IN")}
+              </span>
             </div>
-          </CardContent>
-        </Card>
+          )}
+          
+          {/* Cash to give (after credit) */}
+          <div className="flex justify-between text-sm pt-2 border-t border-border">
+            <span className="text-muted-foreground">Cash to give</span>
+            <span className="font-mono font-semibold text-success">
+              ₹{netCashPayout.toLocaleString("en-IN")}
+            </span>
+          </div>
+          
+          {/* Credit after payout */}
+          {outstandingCredit > 0 && (
+            <div className="flex justify-between text-sm pt-2 border-t border-border">
+              <span className="text-muted-foreground">Credit after</span>
+              <span className="font-mono font-semibold text-foreground">
+                ₹{Math.max(0, outstandingCredit - totalValue).toLocaleString("en-IN")}
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Notes */}
-      {selectedPlayerId && (
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined)     && (
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700">Notes (Optional)</Label>
-          <Input
-            placeholder="Additional notes..."
+          <Label className="text-sm font-medium">Note (optional)</Label>
+          <Textarea
+            placeholder="Add a note..."
             value={formData.notes}
             onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-            className="h-11"
+            className="resize-none border-border focus-visible:ring-ring"
+            rows={2}
           />
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <Alert variant="destructive" className="border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-red-700">{error}</AlertDescription>
-        </Alert>
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm border border-destructive/20">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* House Player CEO Permission Warning */}
+      {selectedPlayerData && (selectedPlayerData.is_house_player === 1 || selectedPlayerData.is_house_player === true) && (
+        <div className={cn(
+          "p-4 rounded-lg border-2 space-y-3",
+          ceoPermissionConfirmed 
+            ? "bg-success/10 border-success/50" 
+            : "bg-[hsl(280,70%,50%)]/10 border-[hsl(280,70%,50%)]/50"
+        )}>
+          <div className="flex items-start gap-3">
+            <div className={cn(
+              "p-2 rounded-lg",
+              ceoPermissionConfirmed ? "bg-success/20" : "bg-[hsl(280,70%,50%)]/20"
+            )}>
+              {ceoPermissionConfirmed ? (
+                <Check className="h-5 w-5 text-success" />
+              ) : (
+                <ShieldAlert className="h-5 w-5 text-[hsl(280,70%,50%)]" />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-[hsl(280,70%,50%)] text-white text-[10px] px-2 gap-1">
+                  <Home className="h-3 w-3" />
+                  HOUSE PLAYER
+                </Badge>
+              </div>
+              <p className={cn(
+                "font-semibold",
+                ceoPermissionConfirmed ? "text-success" : "text-foreground"
+              )}>
+                {ceoPermissionConfirmed 
+                  ? "CEO Permission Granted" 
+                  : `${selectedPlayerData.player_name} requires CEO permission for cashout`
+                }
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {ceoPermissionConfirmed 
+                  ? "You may proceed with the payout." 
+                  : "Please confirm you have received verbal/written approval from CEO before proceeding."
+                }
+              </p>
+            </div>
+          </div>
+          
+          {!ceoPermissionConfirmed && (
+            <Button
+              type="button"
+              onClick={() => setShowCeoPermissionModal(true)}
+              className="w-full bg-[hsl(280,70%,50%)] hover:bg-[hsl(280,70%,45%)] text-white font-semibold"
+            >
+              <ShieldAlert className="h-4 w-4 mr-2" />
+              Confirm CEO Permission Received
+            </Button>
+          )}
+        </div>
       )}
 
       {/* Submit Buttons */}
-      <div className="flex gap-3 pt-2">
-        <Button
-          type="submit"
-          disabled={loading || totalValue === 0 || !selectedPlayerId}
-          className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 shadow-lg disabled:shadow-none"
-        >
-          {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          Process Payout {totalValue > 0 && `• ${formatCurrency(netCashPayout)}`}
-        </Button>
+      <div className="flex gap-3">
         <Button 
           type="button" 
           variant="outline" 
           onClick={onCancel} 
           disabled={loading}
-          className="h-12 px-6"
+          className="flex-1"
         >
           Cancel
         </Button>
+        <Button
+          type="submit"
+          disabled={
+            loading || 
+            totalValue === 0 || 
+            (selectedPlayerId === null || selectedPlayerId === undefined) ||
+            ((selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed)
+          }
+          variant="destructive"
+          className={cn(
+            "flex-1 font-semibold",
+            ((selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed) && "opacity-50"
+          )}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Processing...
+            </>
+          ) : (selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed ? (
+            "CEO Permission Required"
+          ) : (
+            `Process Payout ${totalValue > 0 ? `• ${formatCurrency(netCashPayout)}` : ""}`
+          )}
+        </Button>
       </div>
+
+      {/* CEO Permission Modal */}
+      <Dialog open={showCeoPermissionModal} onOpenChange={setShowCeoPermissionModal}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-[hsl(280,70%,50%)]/10">
+                <ShieldAlert className="h-5 w-5 text-[hsl(280,70%,50%)]" />
+              </div>
+              CEO Permission Required
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedPlayerData && (
+              <>
+                <div className="border-2 border-[hsl(280,70%,50%)]/50 bg-[hsl(280,70%,50%)]/10 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-[hsl(280,70%,50%)] flex items-center justify-center text-white font-bold">
+                      {selectedPlayerData.player_name?.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-foreground">{selectedPlayerData.player_name}</p>
+                      <Badge className="bg-[hsl(280,70%,50%)] text-white mt-1 text-[10px] px-2 gap-1">
+                        <Home className="h-3 w-3" />
+                        HOUSE PLAYER
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-sm text-foreground font-medium mb-2">
+                    This player requires CEO permission for cashout.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Please confirm you have received verbal/written approval from CEO before proceeding.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => {
+                      setCeoPermissionConfirmed(true);
+                      setShowCeoPermissionModal(false);
+                      setError("");
+                    }}
+                    className="w-full bg-[hsl(280,70%,50%)] hover:bg-[hsl(280,70%,45%)] text-white h-12 font-semibold"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Confirm CEO Permission Received
+                  </Button>
+                  <Button
+                    onClick={() => setShowCeoPermissionModal(false)}
+                    variant="outline"
+                    className="w-full h-12"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Float Modal - Only shown when backend explicitly asks for it */}
       <Dialog open={showAddFloatModal} onOpenChange={setShowAddFloatModal}>
@@ -560,13 +749,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
               Add Cash Float
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <Alert className="border-orange-300 bg-orange-50">
-              <AlertCircle className="h-4 w-4 text-orange-600" />
-              <AlertDescription className="text-orange-800">
-                Backend requires <strong>{formatCurrency(neededAmount)}</strong> more float to process this payout
-              </AlertDescription>
-            </Alert>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 text-warning text-sm border border-warning/20">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>Backend requires <strong>{formatCurrency(neededAmount)}</strong> more float to process this payout</span>
+            </div>
 
             <div className="space-y-2">
               <Label className="text-sm font-medium">Float Amount (₹)</Label>
@@ -575,27 +762,33 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                 value={floatAmount}
                 onChange={(e) => setFloatAmount(e.target.value)}
                 min={neededAmount}
-                className="h-12 text-lg font-bold text-center"
+                className="font-mono text-lg text-center border-border focus-visible:ring-ring"
               />
             </div>
 
             <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setShowAddFloatModal(false)} disabled={addingFloat} className="flex-1">
+                Cancel
+              </Button>
               <Button
                 onClick={handleAddCashFloat}
                 disabled={addingFloat || !floatAmount || parseFloat(floatAmount) <= 0}
-                className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                className="flex-1 bg-warning hover:bg-warning/90 text-white font-semibold"
               >
                 {addingFloat ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding...</>
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
                 ) : (
-                  <><Plus className="w-4 h-4 mr-2" />Add {formatCurrency(parseFloat(floatAmount) || 0)}</>
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add {formatCurrency(parseFloat(floatAmount) || 0)}
+                  </>
                 )}
               </Button>
-              <Button variant="outline" onClick={() => setShowAddFloatModal(false)} disabled={addingFloat}>
-                Cancel
-              </Button>
             </div>
-            <p className="text-xs text-center text-gray-500">
+            <p className="text-xs text-center text-muted-foreground">
               After adding float, click "Process Payout" again
             </p>
           </div>

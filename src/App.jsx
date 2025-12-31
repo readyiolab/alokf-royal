@@ -33,6 +33,12 @@ import CashierReports from "./pages/cashier/Reports";
 import KYCManagement from "./pages/cashier/KYCManagement";
 import FloorManager from "./pages/cashier/FloorManagerNew";
 import CRM from "./pages/cashier/CRM";
+import DailyCashbook from "./pages/cashier/DailyCashbook";
+import ChipLedger from "./pages/cashier/ChipLedger";
+import CreditRegister from "./pages/cashier/CreditRegister";
+import FloatChipsLog from "./pages/cashier/FloatChipsLog";
+import CashierManagement from "./pages/cashier/CashierManagement";
+import AuditLogReversals from "./pages/cashier/AuditLogReversals";
 
 // Player pages
 // import PlayerDashboard from "./pages/player/Dashboard";
@@ -91,15 +97,21 @@ const App = () => (
                 <ProtectedRoute allowedRoles={['cashier', 'admin']}>
                   
                     <Routes>
-                      <Route path="dashboard" element={<CashierDashboard />} />
-                      <Route path="transactions" element={<CashierTransactions />} />
+                      <Route path="dashboard" element={<CashierTransactions />} />
+                      <Route path="cashbook" element={<DailyCashbook />} />
+                      <Route path="chip-ledger" element={<ChipLedger />} />
+                      <Route path="credit-register" element={<CreditRegister />} />
+                      <Route path="float-chips-log" element={<FloatChipsLog />} />
                       <Route path="credits" element={<CashierCredits />} />
                       <Route path="players" element={<CashierPlayers />} />
+                      <Route path="cashier-management" element={<CashierManagement />} />
+                      <Route path="audit-log-reversals" element={<AuditLogReversals />} />
                       <Route path="floor-manager" element={<FloorManager />} />
                       <Route path="crm" element={<CRM />} />
                       <Route path="kyc" element={<KYCManagement />} />
                       <Route path="settlement" element={<CashierSettlement />} />
                       <Route path="reports" element={<CashierReports />} />
+                      <Route path="" element={<Navigate to="/cashier/dashboard" replace />} />
                       <Route path="*" element={<Navigate to="/cashier/dashboard" replace />} />
                     </Routes>
                 
