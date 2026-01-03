@@ -229,9 +229,6 @@ const DailyCashbook = () => {
           // Check if it's a club expense activity or expense without player
           return activity === 'club_expense' || 
                  (type === 'expense' && !t.player_id);
-        case 'reversed':
-          return t.is_reversed === 1 || t.is_reversed === true || 
-                 type === 'reversal' || t.reversal_transaction_id;
         default:
           return true;
       }
@@ -253,7 +250,6 @@ const DailyCashbook = () => {
     { id: 'dealer-tips', label: 'Dealer Tips', color: 'bg-blue-500' },
     { id: 'player-expense', label: 'Player Expense', color: 'bg-orange-500' },
     { id: 'club-expense', label: 'Club Expense', color: 'bg-gray-600' },
-    { id: 'reversed', label: 'Reversed', color: 'bg-red-500' },
   ];
 
   return (

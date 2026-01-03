@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { usePlayerSearch } from '../../hooks/usePlayerSearch';
 import transactionService from '../../services/transaction.service';
+import ChipInputGrid from '../common/ChipInputGrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   CheckCircle,
   Loader2,
@@ -16,7 +18,8 @@ import {
   AlertCircle,
   Package,
   Banknote,
-  Wallet
+  Wallet,
+  Save
 } from 'lucide-react';
 
 /**
@@ -59,6 +62,7 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
   const [chipsReceived, setChipsReceived] = useState({
     chips_100: 0,
     chips_500: 0,
+    chips_1000: 0,
     chips_5000: 0,
     chips_10000: 0
   });
@@ -68,6 +72,7 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
     return (
       parseInt(chipsReceived.chips_100 || 0) * 100 +
       parseInt(chipsReceived.chips_500 || 0) * 500 +
+      parseInt(chipsReceived.chips_1000 || 0) * 1000 +
       parseInt(chipsReceived.chips_5000 || 0) * 5000 +
       parseInt(chipsReceived.chips_10000 || 0) * 10000
     );
@@ -77,6 +82,7 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
   const totalChipCount = 
     parseInt(chipsReceived.chips_100 || 0) +
     parseInt(chipsReceived.chips_500 || 0) +
+    parseInt(chipsReceived.chips_1000 || 0) +
     parseInt(chipsReceived.chips_5000 || 0) +
     parseInt(chipsReceived.chips_10000 || 0);
 
@@ -242,7 +248,20 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Header Section */}
+      <div className="space-y-2 pb-4 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+            <Save className="w-5 h-5 text-orange-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Deposit Chips</h2>
+            <p className="text-sm text-gray-500">Store for next session</p>
+          </div>
+        </div>
+      </div>
+
       {/* ✅ Deposit Type Tabs */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
         <button
@@ -271,60 +290,67 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
         </button>
       </div>
 
-      {/* Info Alert */}
-      <Alert className={depositType === 'chips' ? "border-purple-200 bg-purple-50" : "border-green-200 bg-green-50"}>
-        {depositType === 'chips' ? (
-          <>
-            <Package className="h-4 w-4 text-purple-600" />
-            <AlertDescription className="text-purple-700">
-              <strong>Deposit Chips:</strong> Player returns chips to store for next session. 
-              Chips go back to cashier inventory. Player's stored balance increases.
-              <span className="block mt-1 text-xs text-purple-600">
-                Note: Player may have won chips at table. Just count what they're depositing.
-              </span>
-            </AlertDescription>
-          </>
-        ) : (
-          <>
-            <Wallet className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-700">
-              <strong>Deposit Cash:</strong> Player deposits cash which goes to secondary wallet.
-              This is for advance payments or credit settlement.
-            </AlertDescription>
-          </>
-        )}
-      </Alert>
-      {/* Player's current stored balance */}
-      {chipBalance !== null && selectedPlayerId && (
-        <Alert className="border-blue-200 bg-blue-50">
-          <Info className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-700">
-            {loadingBalance ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Loading player info...
-              </span>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{formData.player_name}</p>
-                  <p className="text-sm">Current stored balance</p>
+     
+      {/* Player Balance Information */}
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && loadingBalance && (
+        <div className="flex items-center gap-2 text-muted-foreground py-3 px-4 bg-muted/50 rounded-lg">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm">Loading player info...</span>
+        </div>
+      )}
+      
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && chipBalance && !loadingBalance && (
+        <div className="space-y-4">
+          {/* Player Name Header */}
+          <div className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+            <p className="text-lg font-bold text-gray-900 mb-1">{formData.player_name}</p>
+            <p className="text-xs text-gray-600">Player Balance Information</p>
+          </div>
+
+          {/* Primary and Secondary Balance Cards */}
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            {/* Primary Balance - Current Chips (Playable) */}
+            <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 shadow-md">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-5 h-5 text-emerald-600" />
+                    <span className="text-sm font-semibold text-gray-700">Primary Balance</span>
+                  </div>
+                  <Badge className="bg-emerald-600 text-white text-xs">Playable</Badge>
                 </div>
-                <p className="text-2xl font-bold text-blue-700">
-                  {formatCurrency(chipBalance.stored_chips || 0)}
+                <p className="text-3xl font-black text-emerald-700 mb-1">
+                  ₹{parseFloat(chipBalance?.current_chip_balance || 0).toLocaleString("en-IN")}
                 </p>
-              </div>
-            )}
-          </AlertDescription>
-        </Alert>
+                <p className="text-xs text-gray-600">Current chips in hand</p>
+              </CardContent>
+            </Card>
+
+            {/* Secondary Balance - Stored Chips */}
+            <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-semibold text-gray-700">Secondary Balance</span>
+                  </div>
+                  <Badge className="bg-blue-600 text-white text-xs">Stored</Badge>
+                </div>
+                <p className="text-3xl font-black text-blue-700 mb-1">
+                  ₹{parseFloat(chipBalance?.stored_chips || 0).toLocaleString("en-IN")}
+                </p>
+                <p className="text-xs text-gray-600">Available for chip issuance</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
 
       {/* Player Search */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2 relative">
-          <Label htmlFor="player_name" className="text-gray-700 font-medium">
-            Player Name *
-          </Label>
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-gray-900">Player</Label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2 relative">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
             <Input
@@ -392,96 +418,41 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
                 ))}
             </div>
           )}
-        </div>
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="phone_number" className="text-gray-700 font-medium">
-            Phone Number *
-          </Label>
-          <Input
-            id="phone_number"
-            type="tel"
-            placeholder="9876543210"
-            maxLength={10}
-            value={formData.phone_number}
-            onChange={(e) =>
-              setFormData(prev => ({
-                ...prev,
-                phone_number: e.target.value.replace(/\D/g, "")
-              }))
-            }
-            className="h-11"
-          />
+          <div className="space-y-2">
+            <Label htmlFor="phone_number" className="text-sm font-medium text-gray-900">
+              Phone Number *
+            </Label>
+            <Input
+              id="phone_number"
+              type="tel"
+              placeholder="9876543210"
+              maxLength={10}
+              value={formData.phone_number}
+              onChange={(e) =>
+                setFormData(prev => ({
+                  ...prev,
+                  phone_number: e.target.value.replace(/\D/g, "")
+                }))
+              }
+              className="h-11"
+            />
+          </div>
         </div>
       </div>
 
-      {/* ✅ DEPOSIT CHIPS SECTION */}
+      {/* ✅ DEPOSIT CHIPS SECTION - Using ChipInputGrid like Buy-In */}
       {depositType === 'chips' && (
-        <Card className="border-purple-200 shadow-lg">
-          <CardHeader className="bg-purple-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Coins className="w-5 h-5 text-purple-600" />
-              <span className="text-black">Chips Being Deposited</span>
-            </CardTitle>
-            <p className="text-sm text-gray-600 mt-2">
-              Count the chips the player is depositing for next session
-            </p>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4 bg-white">
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { key: 'chips_100', value: 100, label: '₹100' },
-                { key: 'chips_500', value: 500, label: '₹500' },
-                { key: 'chips_5000', value: 5000, label: '₹5,000' },
-                { key: 'chips_10000', value: 10000, label: '₹10,000' }
-              ].map(({ key, value, label }) => (
-                <div key={key} className="space-y-2">
-                  <Label className="text-gray-700 font-medium">
-                    {label} Chips
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min="0"
-                      value={chipsReceived[key]}
-                      onChange={(e) => handleChipCountChange(key, e.target.value)}
-                      className="h-11 text-center text-lg font-semibold"
-                      placeholder="0"
-                    />
-                    <span className="text-sm text-gray-600 font-medium">
-                      pieces
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Value: <strong>{formatCurrency(chipsReceived[key] * value)}</strong>
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Total calculation display */}
-            <Alert className={totalValue > 0 ? "border-purple-200 bg-purple-50" : "border-gray-200 bg-gray-50"}>
-              <Coins className={`h-4 w-4 ${totalValue > 0 ? "text-purple-600" : "text-gray-600"}`} />
-              <AlertDescription className={totalValue > 0 ? "text-purple-800" : "text-gray-700"}>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span>Total Chips:</span>
-                    <span className="font-bold">{totalChipCount} pieces</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-current">
-                    <span className="font-semibold text-lg">TOTAL VALUE:</span>
-                    <span className={`text-2xl font-bold ${totalValue > 0 ? "text-purple-600" : "text-gray-600"}`}>
-                      {formatCurrency(totalValue)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-2">
-                    These chips will be stored for player's next session. Chips go back to cashier inventory.
-                  </p>
-                </div>
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <ChipInputGrid
+            chips={chipsReceived}
+            onChange={setChipsReceived}
+            title="Chips Being Deposited"
+            showTotal={true}
+            totalLabel="Total Deposit Value"
+          />
+        </div>
       )}
 
       {/* ✅ DEPOSIT CASH SECTION */}
@@ -534,12 +505,12 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
 
       {/* Notes */}
       <div className="space-y-2">
-        <Label htmlFor="notes" className="text-gray-700 font-medium">
-          Notes (Optional)
+        <Label htmlFor="notes" className="text-sm font-medium text-gray-900">
+          Note (optional)
         </Label>
         <Input
           id="notes"
-          placeholder="Any additional notes..."
+          placeholder="Add a note..."
           value={formData.notes}
           onChange={(e) =>
             setFormData(prev => ({ ...prev, notes: e.target.value }))
@@ -559,38 +530,42 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
       )}
 
       {/* Submit Buttons */}
-      <div className="flex gap-3 pt-2">
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          disabled={
-            loading ||
-            !selectedPlayerId ||
-            (depositType === 'chips' ? (totalValue === 0 || totalChipCount === 0) : cashAmount <= 0)
-          }
-          className={`flex-1 h-11 text-base font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed ${
-            depositType === 'chips' 
-              ? 'bg-purple-600 hover:bg-purple-700 text-white'
-              : 'bg-green-600 hover:bg-green-700 text-white'
-          }`}
-        >
-          {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {depositType === 'chips' 
-            ? `Deposit Chips - ${formatCurrency(totalValue)}`
-            : `Deposit Cash - ${formatCurrency(cashAmount)}`
-          }
-        </Button>
+      <div className="flex gap-3">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
           disabled={loading}
-          className="h-11 px-6"
+          className="flex-1"
         >
           Cancel
         </Button>
+        <Button
+          type="submit"
+          disabled={
+            loading ||
+            !selectedPlayerId ||
+            (depositType === 'chips' ? (totalValue === 0 || totalChipCount === 0) : cashAmount <= 0)
+          }
+          className={`flex-1 disabled:bg-gray-400 disabled:cursor-not-allowed ${
+            depositType === 'chips' 
+              ? 'bg-purple-600 hover:bg-purple-700 text-white'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          }`}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            depositType === 'chips' 
+              ? `Deposit Chips ${totalValue > 0 ? `• ${formatCurrency(totalValue)}` : ''}`
+              : `Deposit Cash ${cashAmount > 0 ? `• ${formatCurrency(cashAmount)}` : ''}`
+          )}
+        </Button>
       </div>
-    </div>
+    </form>
   );
 };
 

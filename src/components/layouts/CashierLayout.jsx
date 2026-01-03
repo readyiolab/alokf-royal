@@ -30,7 +30,8 @@ import {
   FileText,
   UserPlus,
   Play,
-  Download
+  Download,
+  Gift
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -46,6 +47,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
 import cashierShiftService from '../../services/cashier-shift.service';
 import userService from '../../services/user.service';
 import { toast } from 'sonner';
@@ -352,8 +367,8 @@ const CashierLayout = ({ children }) => {
     { name: 'Credit Register', href: '/cashier/credit-register', icon: CreditCard },
     { name: 'Float & Chips Log', href: '/cashier/float-chips-log', icon: Wallet },
     { name: 'Players', href: '/cashier/players', icon: Users },
+    { name: 'Promotion Management', href: '/cashier/promotions', icon: Gift },
     { name: 'Cashier Management', href: '/cashier/cashier-management', icon: Settings2 },
-    { name: 'Audit Log - Reversals', href: '/cashier/audit-log-reversals', icon: FileText },
   ];
 
   const formatDate = () => {
@@ -375,66 +390,84 @@ const CashierLayout = ({ children }) => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
-        {/* Logo */}
-        <div className="p-4 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
-              <Coins className="w-5 h-5 text-white" />
+    <SidebarProvider>
+      <div className="flex h-screen w-full">
+        <Sidebar 
+          collapsible="icon" 
+          className="border-r border-gray-200 bg-white"
+          style={{
+            '--sidebar-width-icon': '6rem'
+          }}
+        >
+          <SidebarHeader className="border-b border-gray-100 p-4 group-data-[collapsible=icon]:p-5 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+            <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md group-data-[collapsible=icon]:w-14 group-data-[collapsible=icon]:h-14">
+                <Coins className="w-6 h-6 text-white group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:h-7" />
+              </div>
+              <div className="flex flex-col group-data-[collapsible=icon]:hidden min-w-0">
+                <h1 className="font-bold text-gray-900 text-base leading-tight">Royal Flush</h1>
+                <p className="text-xs text-gray-500 leading-tight">Cashier Module</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-gray-900">Royal Flush</h1>
-              <p className="text-xs text-gray-500">Cashier Module</p>
+          </SidebarHeader>
+
+          <SidebarContent className="p-3 group-data-[collapsible=icon]:p-5">
+            <SidebarGroup>
+              <SidebarMenu className="space-y-2 group-data-[collapsible=icon]:space-y-4">
+                {navigation.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <SidebarMenuItem key={item.name}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.name}
+                        className={`sidebar-nav-item-custom h-14 px-4 group-data-[collapsible=icon]:h-14 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-auto ${isActive ? 'active' : ''}`}
+                      >
+                        <NavLink to={item.href} className="flex items-center gap-4 w-full group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0">
+                          <div className={`icon-wrapper-custom flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 group-data-[collapsible=icon]:w-14 group-data-[collapsible=icon]:h-14 group-data-[collapsible=icon]:rounded-lg ${isActive ? 'active-icon' : ''}`}>
+                            <Icon className="w-6 h-6 flex-shrink-0 transition-all duration-300 group-hover/menu-button:scale-110 group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:h-7 text-white" />
+                          </div>
+                          <span className="font-medium text-sm group-data-[collapsible=icon]:hidden">{item.name}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter className="border-t border-gray-100 p-3 group-data-[collapsible=icon]:p-5">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={handleLogout}
+                  tooltip="Logout"
+                  className="sidebar-nav-item-custom h-14 px-4 text-gray-600 hover:bg-red-50 hover:text-red-600 group-data-[collapsible=icon]:h-14 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:mx-auto"
+                >
+                  <div className="icon-wrapper-custom flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 bg-gray-200 group-data-[collapsible=icon]:w-14 group-data-[collapsible=icon]:h-14 group-data-[collapsible=icon]:rounded-lg">
+                    <LogOut className="w-6 h-6 flex-shrink-0 transition-all duration-300 group-hover/menu-button:scale-110 group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:h-7 text-gray-600" />
+                  </div>
+                  <span className="font-medium text-sm group-data-[collapsible=icon]:hidden">Logout</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+          <SidebarRail />
+        </Sidebar>
+
+        <SidebarInset className="flex flex-col bg-gray-50">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger className="mr-2" />
+              <div className="flex items-center gap-2 text-gray-900">
+                <User className="w-4 h-4 text-gray-600" />
+                <span className="text-sm font-semibold">{user?.full_name || user?.username || 'Cashier'}</span>
+              </div>
             </div>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1 min-h-0">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
-                  transition-all duration-200 sidebar-nav-item ${isActive ? 'active' : ''}`
-                }
-              >
-                <div className="icon-wrapper">
-                  <Icon className="w-5 h-5" />
-                </div>
-                <span>{item.name}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-100 flex-shrink-0">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-gray-900">
-              <User className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-semibold">{user?.full_name || user?.username || 'Cashier'}</span>
-            </div>
-          </div>
 
           <div className="flex items-center gap-4">
             {/* Date */}
@@ -576,10 +609,11 @@ const CashierLayout = ({ children }) => {
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
-          {children || <Outlet context={{ activeShift, handleStartShift, formatCurrency }} />}
-        </main>
+          {/* Page Content */}
+          <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+            {children || <Outlet context={{ activeShift, handleStartShift, formatCurrency }} />}
+          </main>
+        </SidebarInset>
       </div>
 
       {/* End Shift Dialog */}
@@ -748,7 +782,7 @@ const CashierLayout = ({ children }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </SidebarProvider>
   );
 };
 

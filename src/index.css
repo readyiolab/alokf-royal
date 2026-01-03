@@ -348,6 +348,92 @@
     @apply bg-primary/20;
   }
 
+  /* Shadcn Sidebar Custom Styling */
+  .sidebar-nav-item-custom {
+    @apply flex items-center gap-3 rounded-xl text-muted-foreground transition-all duration-300 cursor-pointer;
+    @apply hover:bg-primary/10 hover:text-foreground;
+  }
+
+  .sidebar-nav-item-custom.active {
+    @apply text-primary font-semibold;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.25) 0%,
+      hsl(var(--primary) / 0.15) 50%,
+      hsl(var(--primary) / 0.1) 100%
+    );
+    box-shadow: 
+      0 0 25px hsl(var(--primary) / 0.5),
+      0 0 50px hsl(var(--primary) / 0.25),
+      0 0 75px hsl(var(--primary) / 0.15),
+      inset 0 1px 0 hsl(var(--primary) / 0.3);
+    border: 1px solid hsl(var(--primary) / 0.3);
+  }
+
+  .icon-wrapper-custom {
+    @apply p-2.5 rounded-xl transition-all duration-300;
+  }
+
+  .sidebar-nav-item-custom.active .icon-wrapper-custom {
+    @apply bg-primary text-primary-foreground;
+    box-shadow: 
+      0 0 20px hsl(var(--primary) / 0.7),
+      0 0 40px hsl(var(--primary) / 0.4),
+      0 4px 12px hsl(var(--primary) / 0.3);
+  }
+
+  .sidebar-nav-item-custom:not(.active) .icon-wrapper-custom {
+    @apply bg-muted/80;
+  }
+
+  .sidebar-nav-item-custom:not(.active):hover .icon-wrapper-custom {
+    @apply bg-primary/20;
+  }
+
+  /* Collapsed state improvements - Square button style with more width */
+  [data-collapsible="icon"] .sidebar-nav-item-custom {
+    @apply justify-center rounded-lg;
+    width: 100%;
+    max-width: 6rem;
+  }
+
+  [data-collapsible="icon"] .icon-wrapper-custom {
+    @apply rounded-lg;
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  [data-collapsible="icon"] .icon-wrapper-custom svg {
+    @apply w-7 h-7;
+  }
+
+  /* Active state for collapsed icons - Orange background */
+  [data-collapsible="icon"] .sidebar-nav-item-custom.active .icon-wrapper-custom {
+    @apply bg-gradient-to-br from-orange-400 to-orange-600;
+    box-shadow: 
+      0 0 20px hsl(var(--primary) / 0.7),
+      0 0 40px hsl(var(--primary) / 0.4),
+      0 4px 12px hsl(var(--primary) / 0.3);
+  }
+
+  /* Inactive icons - Gray background */
+  [data-collapsible="icon"] .sidebar-nav-item-custom:not(.active) .icon-wrapper-custom {
+    @apply bg-gray-200;
+  }
+
+  [data-collapsible="icon"] .sidebar-nav-item-custom:not(.active):hover .icon-wrapper-custom {
+    @apply bg-gray-300;
+  }
+
+  /* White icons in collapsed state */
+  [data-collapsible="icon"] .icon-wrapper-custom svg {
+    @apply text-white;
+  }
+
+  [data-collapsible="icon"] .sidebar-nav-item-custom:not(.active) .icon-wrapper-custom svg {
+    @apply text-gray-600;
+  }
+
   /* Glow Card Effect */
   .glow-card {
     @apply relative overflow-hidden;

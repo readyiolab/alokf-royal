@@ -2,7 +2,7 @@
 // Player Expense - Player uses chips for food, drinks, tips, etc.
 
 import React, { useState } from 'react';
-import { UtensilsCrossed, Coffee, Heart, MoreHorizontal, Coins, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { UtensilsCrossed, Coffee, Heart, MoreHorizontal, Coins,Check, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';

@@ -472,6 +472,22 @@ class TransactionService {
       throw apiService.handleError(error);
     }
   }
+
+  /**
+   * Update transaction player name
+   */
+  async updateTransactionPlayerName(token, transactionId, playerId, playerName) {
+    try {
+      const response = await apiService.put(
+        `/transactions/${transactionId}/player-name`,
+        { player_id: playerId, player_name: playerName },
+        token
+      );
+      return response;
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
 }
 
 export default new TransactionService();

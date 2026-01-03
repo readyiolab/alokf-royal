@@ -36,6 +36,7 @@ const StartSessionModal = ({ open, onOpenChange, onSuccess }) => {
     owner_float: '',
     chips_100: '0',
     chips_500: '0',
+    chips_1000: '0',
     chips_5000: '0',
     chips_10000: '0',
   });
@@ -67,12 +68,14 @@ const StartSessionModal = ({ open, onOpenChange, onSuccess }) => {
   const chipValue =
     (parseInt(form.chips_100) || 0) * 100 +
     (parseInt(form.chips_500) || 0) * 500 +
+    (parseInt(form.chips_1000) || 0) * 1000 +
     (parseInt(form.chips_5000) || 0) * 5000 +
     (parseInt(form.chips_10000) || 0) * 10000;
 
   const totalChips =
     (parseInt(form.chips_100) || 0) +
     (parseInt(form.chips_500) || 0) +
+    (parseInt(form.chips_1000) || 0) +
     (parseInt(form.chips_5000) || 0) +
     (parseInt(form.chips_10000) || 0);
 
@@ -116,6 +119,7 @@ const StartSessionModal = ({ open, onOpenChange, onSuccess }) => {
       const chipInventory = {
         chips_100: parseInt(form.chips_100) || 0,
         chips_500: parseInt(form.chips_500) || 0,
+        chips_1000: parseInt(form.chips_1000) || 0,
         chips_5000: parseInt(form.chips_5000) || 0,
         chips_10000: parseInt(form.chips_10000) || 0,
       };
@@ -127,6 +131,7 @@ const StartSessionModal = ({ open, onOpenChange, onSuccess }) => {
         owner_float: '',
         chips_100: '0',
         chips_500: '0',
+        chips_1000: '0',
         chips_5000: '0',
         chips_10000: '0',
       });
@@ -282,6 +287,18 @@ const StartSessionModal = ({ open, onOpenChange, onSuccess }) => {
                       placeholder="0"
                     />
                     <span className="text-xs text-muted-foreground">= {formatCurrency((parseInt(form.chips_500) || 0) * 500)}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-[hsl(45,93%,47%)]">₹1,000 chips</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.chips_1000 || ''}
+                      onChange={(e) => handleChipChange('chips_1000', e.target.value)}
+                      className="font-mono text-lg font-bold"
+                      placeholder="0"
+                    />
+                    <span className="text-xs text-muted-foreground">= {formatCurrency((parseInt(form.chips_1000) || 0) * 1000)}</span>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-bold text-[hsl(145,63%,42%)]">₹5,000 chips</Label>

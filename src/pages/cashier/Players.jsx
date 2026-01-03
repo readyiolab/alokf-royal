@@ -209,10 +209,30 @@ const Players = () => {
     }
   };
 
+  const [playerBalance, setPlayerBalance] = useState(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
+  const fetchPlayerBalance = async (playerId) => {
+    if (!playerId) return;
+    setLoadingBalance(true);
+    try {
+      const balance = await transactionService.getPlayerChipBalance(token, playerId);
+      setPlayerBalance(balance);
+    } catch (err) {
+      console.error("Error fetching player balance:", err);
+      setPlayerBalance(null);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
+
   const handleViewPlayer = async (player) => {
     setSelectedPlayer(player);
     setShowPlayerDialog(true);
-    await fetchPlayerTransactions(player.player_id);
+    await Promise.all([
+      fetchPlayerTransactions(player.player_id),
+      fetchPlayerBalance(player.player_id)
+    ]);
   };
 
   // Start editing credit or limit
@@ -342,19 +362,19 @@ const Players = () => {
   };
 
   const getTransactionColor = (type) => {
-    switch (type) {
-      case "buy_in":
-        return "text-green-600";
-      case "cash_payout":
-        return "text-red-600";
-      case "issue_credit":
-      case "credit_issued":
-        return "text-blue-600";
-      case "settle_credit":
-        return "text-green-600";
-      default:
-        return "text-gray-600";
+    // Green for profit (money/chips coming in)
+    if (["buy_in", "settle_credit", "deposit_cash", "redeem_stored"].includes(type)) {
+      return "text-green-600";
+    } 
+    // Red for loss (money/chips going out)
+    else if (["cash_payout", "return_chips", "deposit_chips", "expense"].includes(type)) {
+      return "text-red-600";
     }
+    // Blue for credit-related
+    else if (["issue_credit", "credit_issued"].includes(type)) {
+      return "text-blue-600";
+    }
+    return "text-gray-600";
   };
 
   if (loading) {
@@ -638,6 +658,19 @@ const Players = () => {
                           <p className="text-sm font-semibold text-green-600">
                             {formatCurrency(player.stored_balance_value || player.stored_chips || 0)}
                           </p>
+                          {player.updated_at && parseFloat(player.stored_balance_value || player.stored_chips || 0) > 0 && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {new Date(player.updated_at).toLocaleDateString('en-IN', { 
+                                day: '2-digit', 
+                                month: 'short', 
+                                year: 'numeric' 
+                              })}, {new Date(player.updated_at).toLocaleTimeString('en-IN', { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                hour12: true 
+                              })}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -657,7 +690,58 @@ const Players = () => {
               </DialogTitle>
             </DialogHeader>
 
-            {loadingTransactions ? (
+            {/* Net Balance and Stored Balance Display */}
+            {selectedPlayer && (
+              <div className="space-y-4 mt-4 mb-6">
+                {/* Net Balance - Excluding Stored Balance */}
+                <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 mb-1">Net Balance</p>
+                        <p className="text-3xl font-bold text-blue-700">
+                          ₹{formatCurrency(playerBalance?.current_chip_balance || 0)}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">Playable / Active balance</p>
+                      </div>
+                      <Wallet className="w-12 h-12 text-blue-600 opacity-50" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Stored Balance - With Date & Time */}
+                {playerBalance && parseFloat(playerBalance.stored_chips || 0) > 0 && (
+                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 mb-1">STORED BALANCE</p>
+                          <p className="text-3xl font-bold text-green-700">
+                            ₹{formatCurrency(playerBalance.stored_chips || 0)}
+                          </p>
+                          {selectedPlayer.updated_at && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Last updated: {new Date(selectedPlayer.updated_at).toLocaleDateString('en-IN', { 
+                                day: '2-digit', 
+                                month: 'short', 
+                                year: 'numeric' 
+                              })}, {new Date(selectedPlayer.updated_at).toLocaleTimeString('en-IN', { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                hour12: true 
+                              })}
+                            </p>
+                          )}
+                        </div>
+                        <PiggyBank className="w-12 h-12 text-green-600 opacity-50" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {loadingTransactions || loadingBalance ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               </div>
@@ -692,23 +776,33 @@ const Players = () => {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p
-                        className={`text-lg font-semibold ${getTransactionColor(
+                      {(() => {
+                        const isProfit = ["buy_in", "settle_credit", "deposit_cash", "redeem_stored"].includes(
                           transaction.transaction_type
-                        )}`}
-                      >
-                        {["buy_in", "settle_credit"].includes(
+                        );
+                        const isLoss = ["cash_payout", "return_chips", "deposit_chips", "expense"].includes(
                           transaction.transaction_type
-                        )
-                          ? "+"
-                          : "-"}
-                        {formatCurrency(transaction.amount || 0)}
-                      </p>
-                      {transaction.chips_amount > 0 && (
-                        <p className="text-sm text-gray-600">
-                          Chips: {transaction.chips_amount}
-                        </p>
-                      )}
+                        );
+                        // Use chips_amount if amount is 0 (for deposit_chips, redeem_stored, etc.)
+                        const displayAmount = (transaction.amount || 0) > 0 
+                          ? transaction.amount 
+                          : (transaction.chips_amount || 0);
+                        const colorClass = isProfit ? "text-green-600" : isLoss ? "text-red-600" : "text-gray-600";
+                        
+                        return (
+                          <>
+                            <p className={`text-lg font-semibold ${colorClass}`}>
+                              {isProfit ? "+" : isLoss ? "-" : ""}
+                              {formatCurrency(displayAmount)}
+                            </p>
+                            {transaction.chips_amount > 0 && transaction.amount > 0 && (
+                              <p className="text-sm text-gray-600">
+                                Chips: {parseFloat(transaction.chips_amount).toLocaleString("en-IN")}
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}

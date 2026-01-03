@@ -22,6 +22,8 @@ import AdminReports from "./pages/admin/Reports";
 import StaffManagement from "./pages/admin/StaffManagement";
 import DealerManagement from "./pages/admin/DealerManagement";
 import UserManagement from "./pages/admin/UserManagement";
+import PromotionManagementAdmin from "./pages/admin/PromotionManagement";
+import PromotionManagement from "./pages/cashier/PromotionManagement";
 
 // Cashier pages
 import CashierDashboard from "./pages/cashier/Dashboard";
@@ -86,6 +88,7 @@ const App = () => (
                     <Route path="dealers" element={<DealerManagement />} />
                     <Route path="kyc" element={<AdminKYCManagement />} />
                     <Route path="credits" element={<AdminCreditApprovals />} />
+                    <Route path="promotions" element={<PromotionManagementAdmin />} />
                     <Route path="reports" element={<AdminReports />} />
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Routes>
@@ -104,6 +107,7 @@ const App = () => (
                       <Route path="float-chips-log" element={<FloatChipsLog />} />
                       <Route path="credits" element={<CashierCredits />} />
                       <Route path="players" element={<CashierPlayers />} />
+                      <Route path="promotions" element={<PromotionManagement />} />
                       <Route path="cashier-management" element={<CashierManagement />} />
                       <Route path="audit-log-reversals" element={<AuditLogReversals />} />
                       <Route path="floor-manager" element={<FloorManager />} />

@@ -27,6 +27,7 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
   const [chipBreakdown, setChipBreakdown] = useState({
     chips_100: '',
     chips_500: '',
+    chips_1000: '',
     chips_5000: '',
     chips_10000: '',
   });
@@ -45,12 +46,14 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
   const chipTotal = 
     (parseInt(chipBreakdown.chips_100) || 0) * 100 +
     (parseInt(chipBreakdown.chips_500) || 0) * 500 +
+    (parseInt(chipBreakdown.chips_1000) || 0) * 1000 +
     (parseInt(chipBreakdown.chips_5000) || 0) * 5000 +
     (parseInt(chipBreakdown.chips_10000) || 0) * 10000;
 
   const chipCount =
     (parseInt(chipBreakdown.chips_100) || 0) +
     (parseInt(chipBreakdown.chips_500) || 0) +
+    (parseInt(chipBreakdown.chips_1000) || 0) +
     (parseInt(chipBreakdown.chips_5000) || 0) +
     (parseInt(chipBreakdown.chips_10000) || 0);
 
@@ -83,6 +86,7 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
         {
           chips_100: 0,
           chips_500: 0,
+          chips_1000: 0,
           chips_5000: 0,
           chips_10000: 0,
         }
@@ -119,6 +123,7 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
         {
           chips_100: parseInt(chipBreakdown.chips_100) || 0,
           chips_500: parseInt(chipBreakdown.chips_500) || 0,
+          chips_1000: parseInt(chipBreakdown.chips_1000) || 0,
           chips_5000: parseInt(chipBreakdown.chips_5000) || 0,
           chips_10000: parseInt(chipBreakdown.chips_10000) || 0,
         }
@@ -145,6 +150,7 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
     setChipBreakdown({
       chips_100: '',
       chips_500: '',
+      chips_1000: '',
       chips_5000: '',
       chips_10000: '',
     });
@@ -262,12 +268,17 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
                   <span className="text-xs text-gray-500">= {formatCurrency((parseInt(chipBreakdown.chips_500) || 0) * 500)}</span>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-bold text-blue-600">₹5,000 chips</Label>
+                  <Label className="text-sm font-bold text-orange-600">₹1K chips</Label>
+                  <Input type="number" min="0" value={chipBreakdown.chips_1000} onChange={(e) => handleChipChange('chips_1000', e.target.value)} className="font-mono text-lg font-bold" placeholder="0" />
+                  <span className="text-xs text-gray-500">= {formatCurrency((parseInt(chipBreakdown.chips_1000) || 0) * 1000)}</span>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-blue-600">₹5K chips</Label>
                   <Input type="number" min="0" value={chipBreakdown.chips_5000} onChange={(e) => handleChipChange('chips_5000', e.target.value)} className="font-mono text-lg font-bold" placeholder="0" />
                   <span className="text-xs text-gray-500">= {formatCurrency((parseInt(chipBreakdown.chips_5000) || 0) * 5000)}</span>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-bold text-purple-600">₹10,000 chips</Label>
+                  <Label className="text-sm font-bold text-purple-600">₹10K chips</Label>
                   <Input type="number" min="0" value={chipBreakdown.chips_10000} onChange={(e) => handleChipChange('chips_10000', e.target.value)} className="font-mono text-lg font-bold" placeholder="0" />
                   <span className="text-xs text-gray-500">= {formatCurrency((parseInt(chipBreakdown.chips_10000) || 0) * 10000)}</span>
                 </div>

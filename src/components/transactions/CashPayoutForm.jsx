@@ -4,6 +4,8 @@ import { useSession } from "../../hooks/useSession";
 import { usePlayerSearch } from "../../hooks/usePlayerSearch";
 import transactionService from "../../services/transaction.service";
 import cashierService from "../../services/cashier.service";
+import playerService from "../../services/player.service";
+import ChipInputGrid from "../common/ChipInputGrid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
@@ -42,7 +45,7 @@ import {
   
   ArrowRight,
   Wallet,
-  
+  Coins,
   ShieldAlert,
   Home
 } from "lucide-react";
@@ -57,6 +60,9 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [chipBalance, setChipBalance] = useState(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
+  const [lastBuyIn, setLastBuyIn] = useState(null);
+  const [totalChipsToCashOut, setTotalChipsToCashOut] = useState("");
+  const [includeStoredBalance, setIncludeStoredBalance] = useState(false);
   
   // Add Cash Float Modal
   const [showAddFloatModal, setShowAddFloatModal] = useState(false);
@@ -83,6 +89,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   const [chipsReceived, setChipsReceived] = useState({
     chips_100: 0,
     chips_500: 0,
+    chips_1000: 0,
     chips_5000: 0,
     chips_10000: 0,
   });
@@ -103,16 +110,30 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     return (
       parseInt(chipsReceived.chips_100 || 0) * 100 +
       parseInt(chipsReceived.chips_500 || 0) * 500 +
+      parseInt(chipsReceived.chips_1000 || 0) * 1000 +
       parseInt(chipsReceived.chips_5000 || 0) * 5000 +
       parseInt(chipsReceived.chips_10000 || 0) * 10000
     );
   };
 
-  const totalValue = calculateTotalValue();
+  // Calculate total value from chip breakdown (source of truth)
+  // If no chips entered yet, use the amount field
+  const chipBreakdownTotal = calculateTotalValue();
+  const enteredAmount = totalChipsToCashOut ? parseFloat(totalChipsToCashOut) : 0;
+  // Use chip breakdown if it has values, otherwise use entered amount
+  const totalValue = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
   const outstandingCredit = parseFloat(chipBalance?.outstanding_credit || 0);
+  const storedBalance = parseFloat(chipBalance?.stored_chips || 0);
+  // Ensure current chips is never negative (shouldn't happen, but safety check)
+  const currentChips = Math.max(0, parseFloat(chipBalance?.current_chip_balance || 0));
+  
+  // If including stored balance, max amount is current chips + stored balance
+  const maxCashOutAmount = includeStoredBalance ? (currentChips + storedBalance) : currentChips;
+  
   const creditToSettle = Math.min(totalValue, outstandingCredit);
   const netCashPayout = Math.max(0, totalValue - outstandingCredit);
-  const availableFloat = dashboard?.wallets?.total?.available ?? 0;
+  // Available Float = Primary wallet current (cash available with cashier)
+  const availableFloat = dashboard?.wallets?.primary?.current ?? 0;
 
   useEffect(() => {
     if ((selectedPlayerId !== null && selectedPlayerId !== undefined) && token) {
@@ -126,10 +147,37 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     setLoadingBalance(true);
     try {
       const balance = await transactionService.getPlayerChipBalance(token, playerId);
-      setChipBalance(balance);
+      console.log("Fetched chip balance:", balance); // Debug log
+      // Ensure balance object has required fields
+      setChipBalance({
+        current_chip_balance: balance?.current_chip_balance || 0,
+        stored_chips: balance?.stored_chips || 0,
+        outstanding_credit: balance?.outstanding_credit || 0,
+        ...balance
+      });
+
+      // Fetch last buy-in transaction
+      try {
+        const transactions = await transactionService.getPlayerTransactionHistory(token, playerId);
+        const buyInTransactions = transactions.filter(t => t.transaction_type === 'buy_in');
+        if (buyInTransactions.length > 0) {
+          const lastTransaction = buyInTransactions[0]; // Most recent first
+          setLastBuyIn(lastTransaction);
+        } else {
+          setLastBuyIn(null);
+        }
+      } catch (err) {
+        console.error("Error fetching last buy-in:", err);
+        setLastBuyIn(null);
+      }
     } catch (err) {
       console.error("Error fetching chip balance:", err);
-      setChipBalance(null);
+      // Set default balance structure even on error
+      setChipBalance({
+        current_chip_balance: 0,
+        stored_chips: 0,
+        outstanding_credit: 0
+      });
     } finally {
       setLoadingBalance(false);
     }
@@ -163,6 +211,9 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     setSelectedPlayerId(player.player_id);
     setSelectedPlayerData(player);
     setSearchQuery(player.player_name);
+    // Reset cash out amount when selecting new player
+    setTotalChipsToCashOut("");
+    setIncludeStoredBalance(false);
     setFormData(prev => ({
       ...prev,
       player_name: player.player_name,
@@ -172,6 +223,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     
     // Reset CEO permission when player changes
     setCeoPermissionConfirmed(false);
+    
+    // ✅ Immediately fetch chip balance when player is selected
+    if (token && player.player_id) {
+      fetchChipBalance(player.player_id);
+    }
     
     // Fetch full player data to check house player status
     try {
@@ -201,10 +257,17 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       return;
     }
 
-    if (totalValue === 0) {
-      setError("Please enter the chips received from player");
+    // Validate that we have either an entered amount or chip breakdown
+    const finalAmount = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
+    if (finalAmount === 0 || finalAmount <= 0) {
+      setError("Please enter the total chips to cash out");
       return;
     }
+    
+    // Note: We don't restrict to maxCashOutAmount because:
+    // - Player might be cashing out chips they won (brought chips to cashier)
+    // - Cashier can process any amount as long as they have float
+    // - The available balance display is just informational
 
     // Check if house player requires CEO permission
     const isHousePlayer = selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true;
@@ -222,6 +285,21 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     setError("");
 
     try {
+      // If including stored balance, we need to redeem it first
+      if (includeStoredBalance && storedBalance > 0) {
+        const storedAmountToRedeem = Math.min(totalValue - currentChips, storedBalance);
+        if (storedAmountToRedeem > 0) {
+          // Redeem stored balance first
+          await transactionService.redeemStoredChips(token, {
+            player_id: selectedPlayerId,
+            player_name: formData.player_name.trim(),
+            phone_number: formData.phone_number.trim(),
+            amount: storedAmountToRedeem,
+            notes: `Redeemed for cash payout`,
+          });
+        }
+      }
+
       await transactionService.createCashPayout(token, {
         player_id: selectedPlayerId,
         player_name: formData.player_name.trim(),
@@ -318,31 +396,33 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-5">
-      {/* Available Float Badge */}
-      <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-success" />
-            <span className="text-sm text-muted-foreground">Deposit Cash</span>
+    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }} className="space-y-6">
+      {/* Header Section */}
+      <div className="space-y-2 pb-4 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+            <ArrowRight className="w-5 h-5 text-red-600" />
           </div>
-          <span className="font-mono font-bold text-xl text-success">
-            ₹{availableFloat.toLocaleString("en-IN")}
-          </span>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Cash Payout</h2>
+            <p className="text-sm text-gray-500">Player withdraws chips for cash</p>
+          </div>
         </div>
       </div>
 
       {/* ✅ Warning if payout exceeds float - but still allow transaction */}
       {netCashPayout > availableFloat && totalValue > 0 && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 text-warning text-sm border border-warning/20">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>Low Float Warning: This payout (₹{netCashPayout.toLocaleString()}) exceeds available float (₹{availableFloat.toLocaleString()}). Transaction will proceed, but consider adding ₹{(netCashPayout - availableFloat).toLocaleString()} float soon.</span>
-        </div>
+        <Alert className="bg-warning/10 text-warning border-warning/20">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            Low Float Warning: This payout (₹{netCashPayout.toLocaleString()}) exceeds available float (₹{availableFloat.toLocaleString()}). Transaction will proceed, but consider adding ₹{(netCashPayout - availableFloat).toLocaleString()} float soon.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Player Search with Command */}
       <div className="space-y-2">
-        <Label>Player</Label>
+        <Label className="text-sm font-medium text-gray-900">Player</Label>
         
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
@@ -350,7 +430,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="w-full justify-between h-14 text-left font-normal bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300"
+              className="w-full justify-between h-12 text-left font-normal border-orange-300 hover:bg-gray-50"
             >
               {(selectedPlayerId !== null && selectedPlayerId !== undefined) && formData.player_name ? (
                 <div className="flex items-center gap-3">
@@ -434,144 +514,242 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         </Popover>
       </div>
 
-      {/* Player Balance Info */}
-      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && loadingBalance && (
-        <div className="flex items-center gap-2 text-muted-foreground py-3 px-4 bg-muted/50 rounded-lg">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-sm">Loading player info...</span>
-        </div>
-      )}
-      
-      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && chipBalance && !loadingBalance && (
-        <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
-          <p className="text-base font-semibold text-foreground">{formData.player_name}</p>
-          <div className="grid gap-4 grid-cols-2">
-            <div>
-              <span className="text-sm text-muted-foreground block mb-1">Credit</span>
-              <p className={cn(
-                "font-mono font-bold text-xl",
-                outstandingCredit > 0 ? "text-destructive" : "text-[hsl(142,71%,35%)]"
-              )}>
-                ₹{outstandingCredit.toLocaleString("en-IN")}
-              </p>
+      {/* Player Financial Summary - Clear and Simple */}
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && (
+        <>
+          {loadingBalance ? (
+            <div className="flex items-center gap-2 text-muted-foreground py-2 px-3 bg-muted/50 rounded-lg">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Loading balance...</span>
             </div>
-            <div>
-              <span className="text-sm text-muted-foreground block mb-1">Stored Balance</span>
-              <p className="font-mono font-bold text-xl text-[hsl(142,71%,35%)]">
-                ₹0
-              </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {/* Current Winnings */}
+              <Card className={`${
+                currentChips < 0 
+                  ? 'bg-red-50 border-red-200' 
+                  : currentChips === 0 
+                  ? 'bg-gray-50 border-gray-200' 
+                  : 'bg-green-50 border-green-200'
+              }`}>
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-600 mb-1">Current Winnings</p>
+                  <p className={`text-lg font-bold ${
+                    currentChips < 0 
+                      ? 'text-red-700' 
+                      : currentChips === 0 
+                      ? 'text-gray-700' 
+                      : 'text-green-700'
+                  }`}>
+                    ₹{currentChips.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {currentChips < 0 ? 'Negative balance' : 'Chips in hand'}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Stored Balance */}
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-600 mb-1">Stored Balance</p>
+                  <p className="text-lg font-bold text-blue-700">
+                    ₹{storedBalance.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Available to redeem</p>
+                </CardContent>
+              </Card>
+
+              {/* Available Float */}
+              <Card className="bg-orange-50 border-orange-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Coins className="w-4 h-4 text-orange-600" />
+                    <p className="text-xs text-gray-600">Available Float</p>
+                  </div>
+                  <p className="text-lg font-bold text-orange-700">
+                    ₹{availableFloat.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Cashier's float</p>
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
-      {/* Chip Breakdown Input */}
-      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && (
-        <div className="p-5 rounded-xl bg-gradient-to-b from-muted/60 to-muted/30 border border-border space-y-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">Chips Received</p>
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-success/20 text-success">
-              {Object.values(chipsReceived).reduce((sum, val) => sum + (parseInt(val) || 0), 0)} chips = ₹{totalValue.toLocaleString("en-IN")}
-            </span>
+      {/* Warning for negative balance */}
+      {currentChips < 0 && (
+        <Alert variant="destructive" className="bg-red-50 border-red-200">
+          <AlertCircle className="w-4 h-4 text-red-600" />
+          <AlertDescription className="text-sm text-red-700">
+            Player has a negative balance (₹{Math.abs(currentChips).toLocaleString("en-IN")}). 
+            Please record a winning adjustment to correct this before processing cash payout.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Cash Payout Options */}
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && !loadingBalance && (
+        <>
+          {/* Include Stored Balance Option */}
+          {storedBalance > 0 && (
+            <Card className="border-2 border-blue-200 bg-blue-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Switch
+                      id="include-stored"
+                      checked={includeStoredBalance}
+                      onCheckedChange={(checked) => {
+                        setIncludeStoredBalance(checked);
+                        if (totalChipsToCashOut) {
+                          const numValue = parseFloat(totalChipsToCashOut) || 0;
+                          if (numValue > 0) {
+                            const breakdown = {
+                              chips_10000: Math.floor(numValue / 10000),
+                              chips_5000: Math.floor((numValue % 10000) / 5000),
+                              chips_1000: Math.floor((numValue % 5000) / 1000),
+                              chips_500: Math.floor((numValue % 1000) / 500),
+                              chips_100: Math.floor((numValue % 500) / 100),
+                            };
+                            setChipsReceived(breakdown);
+                          }
+                        }
+                      }}
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="include-stored" className="text-sm font-medium text-gray-900 cursor-pointer">
+                        Include Stored Balance
+                      </Label>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Stored: ₹{storedBalance.toLocaleString("en-IN")} • Total available: ₹{(currentChips + storedBalance).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Total Chips to Cash Out */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-900">Total Chips to Cash Out (₹)</Label>
+            <Input
+              type="number"
+              min="0"
+              value={totalChipsToCashOut}
+              onChange={(e) => {
+                const value = e.target.value;
+                const numValue = parseFloat(value) || 0;
+                setTotalChipsToCashOut(value);
+                if (error && error.includes('Maximum')) {
+                  setError("");
+                }
+                if (value && numValue > 0) {
+                  const breakdown = {
+                    chips_10000: Math.floor(numValue / 10000),
+                    chips_5000: Math.floor((numValue % 10000) / 5000),
+                    chips_1000: Math.floor((numValue % 5000) / 1000),
+                    chips_500: Math.floor((numValue % 1000) / 500),
+                    chips_100: Math.floor((numValue % 500) / 100),
+                  };
+                  setChipsReceived(breakdown);
+                } else if (!value || value === '') {
+                  setChipsReceived({ chips_100: 0, chips_500: 0, chips_1000: 0, chips_5000: 0, chips_10000: 0 });
+                }
+              }}
+              className="h-12 text-lg"
+              placeholder="Enter amount"
+            />
+            <p className="text-xs text-gray-500">
+              Available: ₹{maxCashOutAmount.toLocaleString("en-IN")} {includeStoredBalance ? '(Winnings + Stored)' : '(Winnings only)'}
+              {parseFloat(totalChipsToCashOut || 0) > maxCashOutAmount && (
+                <span className="text-orange-600 font-medium ml-2">
+                  • Player may be cashing out chips they won
+                </span>
+              )}
+            </p>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-[hsl(340,82%,52%)]">₹100 chips</Label>
-              <Input
-                type="number"
-                min="0"
-                value={chipsReceived.chips_100 || ''}
-                onChange={(e) => handleChipCountChange('chips_100', e.target.value)}
-                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
-                placeholder="0"
-              />
-              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_100) || 0) * 100).toLocaleString("en-IN")}</span>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-[hsl(210,100%,56%)]">₹500 chips</Label>
-              <Input
-                type="number"
-                min="0"
-                value={chipsReceived.chips_500 || ''}
-                onChange={(e) => handleChipCountChange('chips_500', e.target.value)}
-                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
-                placeholder="0"
-              />
-              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_500) || 0) * 500).toLocaleString("en-IN")}</span>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-[hsl(145,63%,42%)]">₹5,000 chips</Label>
-              <Input
-                type="number"
-                min="0"
-                value={chipsReceived.chips_5000 || ''}
-                onChange={(e) => handleChipCountChange('chips_5000', e.target.value)}
-                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
-                placeholder="0"
-              />
-              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_5000) || 0) * 5000).toLocaleString("en-IN")}</span>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-[hsl(280,70%,55%)]">₹10,000 chips</Label>
-              <Input
-                type="number"
-                min="0"
-                value={chipsReceived.chips_10000 || ''}
-                onChange={(e) => handleChipCountChange('chips_10000', e.target.value)}
-                className="font-mono text-lg font-bold border-border focus-visible:ring-ring"
-                placeholder="0"
-              />
-              <span className="text-xs text-muted-foreground">= ₹{((parseInt(chipsReceived.chips_10000) || 0) * 10000).toLocaleString("en-IN")}</span>
-            </div>
-          </div>
-        </div>
+
+          {/* Chip Breakdown */}
+          {((totalChipsToCashOut && parseFloat(totalChipsToCashOut) > 0) || chipBreakdownTotal > 0) && (
+            <Card className="bg-gradient-to-br from-slate-50 to-gray-100 border-slate-200 shadow-md">
+              <CardContent className="pt-5 pb-4">
+                <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+                  <Coins className="w-4 h-4" />
+                  Chip Breakdown
+                </Label>
+                <ChipInputGrid
+                  chips={chipsReceived}
+                  onChange={(newChips) => {
+                    setChipsReceived(newChips);
+                    const newTotal = 
+                      (parseInt(newChips.chips_100) || 0) * 100 +
+                      (parseInt(newChips.chips_500) || 0) * 500 +
+                      (parseInt(newChips.chips_1000) || 0) * 1000 +
+                      (parseInt(newChips.chips_5000) || 0) * 5000 +
+                      (parseInt(newChips.chips_10000) || 0) * 10000;
+                    if (newTotal !== parseFloat(totalChipsToCashOut || 0)) {
+                      setTotalChipsToCashOut(String(newTotal));
+                    }
+                  }}
+                  title="Chips to Give"
+                  showTotal={true}
+                  totalLabel="Total Chips Value"
+                />
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Settlement Preview */}
       {totalValue > 0 && (selectedPlayerId !== null && selectedPlayerId !== undefined) && (
-        <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-3">
-          <p className="text-sm font-medium text-foreground">Payout Breakdown</p>
-          
-          {/* Credit settlement first */}
-          {creditToSettle > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Credit to settle</span>
-              <span className="font-mono font-semibold text-destructive">
-                -₹{creditToSettle.toLocaleString("en-IN")}
+        <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-900">Payout Breakdown</p>
+            
+            {/* Credit settlement first */}
+            {creditToSettle > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Credit to settle</span>
+                <span className="font-mono font-semibold text-red-600">
+                  -₹{creditToSettle.toLocaleString("en-IN")}
+                </span>
+              </div>
+            )}
+            
+            {/* Cash to give (after credit) */}
+            <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+              <span className="text-gray-600">Cash to give</span>
+              <span className="font-mono font-semibold text-green-600 text-lg">
+                ₹{netCashPayout.toLocaleString("en-IN")}
               </span>
             </div>
-          )}
-          
-          {/* Cash to give (after credit) */}
-          <div className="flex justify-between text-sm pt-2 border-t border-border">
-            <span className="text-muted-foreground">Cash to give</span>
-            <span className="font-mono font-semibold text-success">
-              ₹{netCashPayout.toLocaleString("en-IN")}
-            </span>
-          </div>
-          
-          {/* Credit after payout */}
-          {outstandingCredit > 0 && (
-            <div className="flex justify-between text-sm pt-2 border-t border-border">
-              <span className="text-muted-foreground">Credit after</span>
-              <span className="font-mono font-semibold text-foreground">
-                ₹{Math.max(0, outstandingCredit - totalValue).toLocaleString("en-IN")}
-              </span>
-            </div>
-          )}
-        </div>
+            
+            {/* Credit after payout */}
+            {outstandingCredit > 0 && (
+              <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+                <span className="text-gray-600">Credit after</span>
+                <span className="font-mono font-semibold text-gray-900">
+                  ₹{Math.max(0, outstandingCredit - totalValue).toLocaleString("en-IN")}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Notes */}
-      {(selectedPlayerId !== null && selectedPlayerId !== undefined)     && (
+      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && (
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Note (optional)</Label>
+          <Label className="text-sm font-medium text-gray-900">Note (optional)</Label>
           <Textarea
             placeholder="Add a note..."
             value={formData.notes}
             onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-            className="resize-none border-border focus-visible:ring-ring"
+            className="resize-none"
             rows={2}
           />
         </div>
@@ -658,6 +836,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
           disabled={
             loading || 
             totalValue === 0 || 
+            !totalChipsToCashOut ||
             (selectedPlayerId === null || selectedPlayerId === undefined) ||
             ((selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed)
           }

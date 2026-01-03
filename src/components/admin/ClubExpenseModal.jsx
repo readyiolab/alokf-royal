@@ -2,7 +2,7 @@
 // Club Expense - Food delivery, salary advance, utilities, supplies, etc.
 
 import React, { useState, useEffect } from 'react';
-import { Building2, Truck, Wallet, Zap, Package, Wrench, MoreHorizontal, User, Check, Loader2, CheckCircle, Receipt, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { Building2, Truck, Wallet, Zap, Package, Wrench, MoreHorizontal, User, Check, Loader2, CheckCircle, Receipt, AlertCircle, Clock, RefreshCw, Upload, X, Image as ImageIcon, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Card, CardContent } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
@@ -41,6 +41,13 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
   const [loadingStaffDetails, setLoadingStaffDetails] = useState(false);
   const [remainingBalance, setRemainingBalance] = useState(null);
   const [advanceHistory, setAdvanceHistory] = useState([]);
+  
+  // Attachment states
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState(null);
+  const [attachmentPublicId, setAttachmentPublicId] = useState(null);
 
   useEffect(() => {
     if (isOpen && category === 'salary_advance') {
@@ -114,13 +121,22 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
     setError('');
 
     try {
+      console.log('Submitting expense with attachment:', {
+        attachmentUrl,
+        attachmentPublicId
+      });
+      
       const expenseData = {
         expense_category: category,
         amount: parseFloat(amount),
         notes: description,
         vendor_name: vendorName,
-        bill_number: billNumber
+        bill_number: billNumber,
+        attachment_url: attachmentUrl || null,
+        attachment_public_id: attachmentPublicId || null
       };
+      
+      console.log('Expense data being sent:', expenseData);
 
       if (category === 'salary_advance' && selectedStaff) {
         expenseData.staff_id = selectedStaff.staff_id;
@@ -142,6 +158,87 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
+  const handleAttachmentSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB');
+      return;
+    }
+
+    setAttachment(file);
+    setError('');
+
+    // Generate preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAttachmentPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setAttachmentPreview(null);
+    }
+
+    // Upload to backend
+    await uploadAttachment(file);
+  };
+
+  const uploadAttachment = async (file) => {
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append('attachment', file);
+
+      // Get API base URL
+      const API_BASE_URL = window.location.hostname === 'localhost'
+        ? 'http://localhost:5000/api'
+        : 'https://royalflush.red/api';
+
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/expenses/upload-attachment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'Failed to upload attachment');
+      }
+
+      const result = await response.json();
+      console.log('Attachment upload result:', result);
+      if (result.success) {
+        // Store attachment URL and public_id for later use
+        setAttachmentUrl(result.data.url);
+        setAttachmentPublicId(result.data.public_id);
+        console.log('Attachment URL saved:', result.data.url);
+        console.log('Attachment Public ID saved:', result.data.public_id);
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Attachment upload error:', error);
+      setError(error.message || 'Failed to upload attachment');
+      setAttachment(null);
+      setAttachmentPreview(null);
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachment(null);
+    setAttachmentPreview(null);
+    setAttachmentUrl(null);
+    setAttachmentPublicId(null);
+  };
+
   const resetForm = () => {
     setCategory('');
     setAmount('');
@@ -153,6 +250,10 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
     setAdvanceHistory([]);
     setError('');
     setSuccess('');
+    setAttachment(null);
+    setAttachmentPreview(null);
+    setAttachmentUrl(null);
+    setAttachmentPublicId(null);
   };
 
   const formatCurrency = (amount) => {
@@ -479,6 +580,75 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* Attachment Upload */}
+          {category && category !== 'salary_advance' && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Attachment (Optional)
+              </Label>
+              <div className="space-y-2">
+                {!attachment ? (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                    <input
+                      type="file"
+                      id="attachment-upload"
+                      accept="image/*,.pdf,.doc,.docx"
+                      onChange={handleAttachmentSelect}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="attachment-upload"
+                      className="flex flex-col items-center justify-center cursor-pointer"
+                    >
+                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600">Click to upload bill/receipt</p>
+                      <p className="text-xs text-gray-400 mt-1">Images, PDF, or documents (Max 5MB)</p>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {attachmentPreview ? (
+                          <img
+                            src={attachmentPreview}
+                            alt="Preview"
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
+                            <FileText className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{attachment.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {(attachment.size / 1024).toFixed(2)} KB
+                            {uploadingAttachment && ' • Uploading...'}
+                            {!uploadingAttachment && attachmentUrl && (
+                              <span className="text-green-600 font-medium"> • Uploaded ✓</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveAttachment}
+                        disabled={uploadingAttachment}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Summary */}
           {amount && parseFloat(amount) > 0 && (category !== 'salary_advance' || remainingBalance?.remaining_balance > 0) && (
             <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200 shadow-md">
@@ -525,6 +695,7 @@ const ClubExpenseModal = ({ isOpen, onClose, onSuccess }) => {
               onClick={handleSubmit}
               disabled={
                 loading || 
+                uploadingAttachment ||
                 !category || 
                 !amount || 
                 parseFloat(amount) <= 0 || 

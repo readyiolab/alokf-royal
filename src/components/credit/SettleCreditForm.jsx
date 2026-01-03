@@ -185,13 +185,23 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-6">
+      {/* Header Section */}
+      <div className="space-y-2 pb-4 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+            <Banknote className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Settle Cash</h2>
+            <p className="text-sm text-gray-500">Pay credit with cash</p>
+          </div>
+        </div>
+      </div>
+
       {/* Player Search with Command */}
-      <div className="space-y-3">
-        <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-          <User className="w-4 h-4" />
-          Select Player *
-        </Label>
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-gray-900">Player</Label>
         
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
@@ -199,7 +209,7 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="w-full justify-between h-14 text-left font-normal bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300"
+              className="w-full justify-between h-12 text-left font-normal border-orange-300 hover:bg-gray-50"
             >
               {selectedPlayer ? (
                 <div className="flex items-center gap-3">
@@ -333,48 +343,37 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
       {/* Settlement Amount Section - Only show if there's credit */}
       {outstandingCredit > 0 && (
         <>
-          <Card className="bg-gradient-to-br from-slate-50 to-gray-100 border-slate-200 shadow-md">
-            <CardContent className="pt-5 pb-4">
-              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-                <Wallet className="w-4 h-4" />
-                Settlement Amount
-              </Label>
-              
-              <div className="space-y-3">
-                <Input
-                  name="settlement_amount"
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={formData.settlement_amount}
-                  onChange={handleChange}
-                  placeholder="Enter settlement amount"
-                  className={`h-14 text-2xl font-bold text-center border-2 ${
-                    settlementAmount <= outstandingCredit && settlementAmount > 0
-                      ? 'border-emerald-400 text-emerald-700 bg-emerald-50'
-                      : 'border-gray-200'
-                  }`}
-                />
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Max: {formatCurrency(outstandingCredit)}</span>
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    onClick={() => setFormData(prev => ({ ...prev, settlement_amount: outstandingCredit.toString() }))}
-                    className="text-emerald-600 hover:text-emerald-700 font-semibold p-0 h-auto"
-                  >
-                    Settle Full Amount
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-900">Settlement Amount (₹)</Label>
+            <Input
+              name="settlement_amount"
+              type="number"
+              min="0"
+              step="100"
+              value={formData.settlement_amount}
+              onChange={handleChange}
+              placeholder="Enter settlement amount"
+              className="h-12 text-lg"
+            />
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Max: {formatCurrency(outstandingCredit)}</span>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, settlement_amount: outstandingCredit.toString() }))}
+                className="text-emerald-600 hover:text-emerald-700 font-semibold p-0 h-auto"
+              >
+                Settle Full Amount
+              </Button>
+            </div>
+          </div>
 
           {/* Settlement Preview */}
           {settlementAmount > 0 && (
-            <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200 shadow-md">
-              <CardContent className="pt-5 pb-4 space-y-3">
+            <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+              <CardContent className="p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-900">Settlement Breakdown</p>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Outstanding Credit</span>
                   <span className="font-semibold text-gray-900">{formatCurrency(outstandingCredit)}</span>
@@ -386,9 +385,9 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
                   </span>
                   <span className="font-semibold">-{formatCurrency(settlementAmount)}</span>
                 </div>
-                <div className="flex justify-between pt-3 border-t border-emerald-200">
+                <div className="flex justify-between pt-2 border-t border-gray-200">
                   <span className="font-bold text-gray-800">Remaining Balance</span>
-                  <span className={`text-3xl font-black ${remainingAmount > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                  <span className={`text-lg font-bold ${remainingAmount > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
                     {formatCurrency(remainingAmount)}
                   </span>
                 </div>
@@ -405,11 +404,8 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
           )}
 
           {/* Settlement Method Section */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Building2 className="w-4 h-4" />
-              Settlement Method
-            </Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-900">Settlement Method</Label>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: 'cash', label: 'Cash', icon: Banknote },
@@ -451,14 +447,14 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
 
           {/* Notes Section */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">
-              Notes <span className="text-gray-400">(Optional)</span>
+            <Label className="text-sm font-medium text-gray-900">
+              Note (optional)
             </Label>
             <Input
               name="notes"
               value={formData.notes}
               onChange={handleChange}
-              placeholder="Add any notes about this settlement..."
+              placeholder="Add a note..."
               className="h-11"
             />
           </div>
@@ -483,7 +479,7 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
 
       {/* Action Buttons */}
       {outstandingCredit > 0 && (
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-3">
           <Button
             type="button"
             variant="outline"
@@ -497,15 +493,14 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
               setSuccess(null);
             }}
             disabled={loading}
-            className="flex-1 h-12"
+            className="flex-1"
           >
-            Clear
+            Cancel
           </Button>
           <Button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             disabled={loading || !token || settlementAmount <= 0}
-            className="flex-1 h-12 text-base font-semibold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg disabled:shadow-none"
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
           >
             {loading ? (
               <>
@@ -513,12 +508,12 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
                 Processing...
               </>
             ) : (
-              `Settle ${formatCurrency(settlementAmount)}`
+              `Settle Cash ${settlementAmount > 0 ? `• ${formatCurrency(settlementAmount)}` : ''}`
             )}
           </Button>
         </div>
       )}
-    </div>
+    </form>
   );
 };
 

@@ -32,7 +32,8 @@ import {
   DollarSign,
   Wallet,
   UserCog,
-  HandCoins
+  HandCoins,
+  Gift
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -80,6 +81,7 @@ const AdminLayout = ({ children }) => {
     { name: 'Dealers', href: '/admin/dealers', icon: HandCoins },
     { name: 'KYC Management', href: '/admin/kyc', icon: BadgeCheck },
     { name: 'Credit Approvals', href: '/admin/credits', icon: CreditCard, badge: 3 },
+    { name: 'Promotion Management', href: '/admin/promotions', icon: Gift },
   ];
 
   const isActive = (path) => location.pathname === path;

@@ -127,14 +127,19 @@ const QuickActionsGrid = ({
               className="relative overflow-hidden bg-white hover:shadow-xl transition-all duration-200 cursor-pointer active:scale-[0.98] group"
               onClick={() => onSelectTransaction(type.id)}
             >
-              <CardContent className="p-5">
-                <div
-                  className={`w-12 h-12 rounded-xl ${type.bgColor} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-                >
-                  <Icon className={`w-6 h-6 ${type.color}`} />
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div
+                    className={`w-12 h-12 rounded-xl ${type.bgColor} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}
+                  >
+                    <Icon className={`w-6 h-6 ${type.color}`} />
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900 flex-1">{type.name}</h3>
                 </div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">{type.name}</h3>
-                <p className="text-xs text-gray-500">{type.description}</p>
+                <div className="flex items-start gap-3">
+                  <div className="w-12 flex-shrink-0"></div>
+                  <p className="text-xs text-gray-500 flex-1">{type.description}</p>
+                </div>
               </CardContent>
             </Card>
           );
@@ -155,14 +160,19 @@ const QuickActionsGrid = ({
               className="relative overflow-hidden bg-white hover:shadow-xl transition-all duration-200 cursor-pointer active:scale-[0.98] group"
               onClick={action.onClick}
             >
-              <CardContent className="p-5">
-                <div
-                  className={`w-12 h-12 rounded-xl ${action.bgColor} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
-                >
-                  <Icon className={`w-6 h-6 ${action.color}`} />
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div
+                    className={`w-12 h-12 rounded-xl ${action.bgColor} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}
+                  >
+                    <Icon className={`w-6 h-6 ${action.color}`} />
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900 flex-1">{action.name}</h3>
                 </div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">{action.name}</h3>
-                <p className="text-xs text-gray-500">{action.description}</p>
+                <div className="flex items-start gap-3">
+                  <div className="w-12 flex-shrink-0"></div>
+                  <p className="text-xs text-gray-500 flex-1">{action.description}</p>
+                </div>
               </CardContent>
             </Card>
           );

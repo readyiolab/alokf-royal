@@ -29,13 +29,12 @@ import transactionService from '../../services/transaction.service';
 
 // Modular Components
 import {
-  SessionOverviewCard,
+ 
   StartSessionModal,
   QuickActionsGrid,
-  CashOutCard,
+ 
   ChipsInventoryCard,
-  OutstandingCreditCard,
-  TransactionHistoryTabs,
+ 
   TopUpFloatModal,
   ViewFloatModal,
   CloseDayModal,
@@ -546,30 +545,10 @@ const CashierTransactions = () => {
             </Card>
 
             {/* CHIPS INVENTORY Card */}
-            <Card className="bg-white border border-gray-200">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xs font-medium text-gray-700">CHIPS INVENTORY</CardTitle>
-                <Settings className="w-4 h-4 text-gray-500" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Opening</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-semibold text-black">{(dashboard?.chip_inventory?.opening?.total_count || 0)} chips</span>
-                      <span className="text-sm font-semibold text-black">Value {formatCurrency(dashboard?.chip_inventory?.opening?.total_value || 0)}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">With Cashier</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-semibold text-black">{(dashboard?.chip_inventory?.current_in_hand?.total_count || 0)} chips</span>
-                      <span className="text-sm font-semibold text-black">Value {formatCurrency(dashboard?.chip_inventory?.current_in_hand?.total_value || 0)}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <ChipsInventoryCard 
+              dashboard={dashboard} 
+              formatCurrency={formatCurrency}
+            />
           </div>
         </div>
 

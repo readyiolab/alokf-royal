@@ -40,6 +40,7 @@ export const CreditRequestForm = ({
   const [chipBreakdown, setChipBreakdown] = useState({
     chips_100: 0,
     chips_500: 0,
+    chips_1000: 0,
     chips_5000: 0,
     chips_10000: 0
   });
@@ -117,6 +118,7 @@ export const CreditRequestForm = ({
     return (
       (chipBreakdown.chips_10000 * 10000) +
       (chipBreakdown.chips_5000 * 5000) +
+      (chipBreakdown.chips_1000 * 1000) +
       (chipBreakdown.chips_500 * 500) +
       (chipBreakdown.chips_100 * 100)
     );
@@ -174,7 +176,7 @@ export const CreditRequestForm = ({
       const result = await creditService.createCreditRequest(requestData);
       
       // ✅ Better success message
-      const chipBreakdownText = `${chipBreakdown.chips_10000}×₹10K, ${chipBreakdown.chips_5000}×₹5K, ${chipBreakdown.chips_500}×₹500, ${chipBreakdown.chips_100}×₹100`;
+      const chipBreakdownText = `${chipBreakdown.chips_10000}×₹10K, ${chipBreakdown.chips_5000}×₹5K, ${chipBreakdown.chips_1000}×₹1K, ${chipBreakdown.chips_500}×₹500, ${chipBreakdown.chips_100}×₹100`;
       setSuccess(`✅ ₹${amount.toLocaleString('en-IN')} mixed chips (${chipBreakdownText}) issued to ${selectedPlayer.player_name}`);
       
       // Reset form
@@ -184,6 +186,7 @@ export const CreditRequestForm = ({
       setChipBreakdown({
         chips_100: 0,
         chips_500: 0,
+        chips_1000: 0,
         chips_5000: 0,
         chips_10000: 0
       });
@@ -410,10 +413,11 @@ export const CreditRequestForm = ({
             Chips to be Given
           </Label>
           
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-3">
             {[
               { key: 'chips_100', value: 100, colorClass: 'text-red-600 border-red-200 focus:border-red-400 bg-red-50', label: '₹100' },
               { key: 'chips_500', value: 500, colorClass: 'text-green-600 border-green-200 focus:border-green-400 bg-green-50', label: '₹500' },
+              { key: 'chips_1000', value: 1000, colorClass: 'text-orange-600 border-orange-200 focus:border-orange-400 bg-orange-50', label: '₹1K' },
               { key: 'chips_5000', value: 5000, colorClass: 'text-blue-600 border-blue-200 focus:border-blue-400 bg-blue-50', label: '₹5K' },
               { key: 'chips_10000', value: 10000, colorClass: 'text-purple-600 border-purple-200 focus:border-purple-400 bg-purple-50', label: '₹10K' }
             ].map(chip => (

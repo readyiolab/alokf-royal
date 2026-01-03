@@ -91,6 +91,7 @@ class CashierService {
         payload.chip_inventory = {
           chips_100: parseInt(chipInventory.chips_100) || 0,
           chips_500: parseInt(chipInventory.chips_500) || 0,
+          chips_1000: parseInt(chipInventory.chips_1000) || 0,
           chips_5000: parseInt(chipInventory.chips_5000) || 0,
           chips_10000: parseInt(chipInventory.chips_10000) || 0,
         };

@@ -147,6 +147,9 @@ const ChipLedgerList = ({ transactions = [] }) => {
                       {t.chips_500 > 0 && (
                         <Badge className="text-xs bg-blue-100 text-blue-800">₹500 × {t.chips_500}</Badge>
                       )}
+                      {t.chips_1000 > 0 && (
+                        <Badge className="text-xs bg-yellow-100 text-yellow-800">₹1K × {t.chips_1000}</Badge>
+                      )}
                       {t.chips_5000 > 0 && (
                         <Badge className="text-xs bg-green-100 text-green-800">₹5K × {t.chips_5000}</Badge>
                       )}
