@@ -24,7 +24,6 @@ import {
   CommandInput, 
   CommandItem, 
   CommandList,
-  CommandSeparator
 } from "@/components/ui/command";
 import {
   Dialog,
@@ -38,11 +37,9 @@ import {
   Search, 
   AlertCircle, 
   Plus, 
-  
   User, 
   ChevronsUpDown, 
   Check, 
-  
   ArrowRight,
   Wallet,
   Coins,
@@ -58,10 +55,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   const [success, setSuccess] = useState(false);
   const [open, setOpen] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
-  const [chipBalance, setChipBalance] = useState(null);
+  const [storedBalance, setStoredBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
-  const [lastBuyIn, setLastBuyIn] = useState(null);
   const [totalChipsToCashOut, setTotalChipsToCashOut] = useState("");
+  
+  // Toggle to include stored balance
   const [includeStoredBalance, setIncludeStoredBalance] = useState(false);
   
   // Add Cash Float Modal
@@ -116,68 +114,31 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     );
   };
 
-  // Calculate total value from chip breakdown (source of truth)
-  // If no chips entered yet, use the amount field
   const chipBreakdownTotal = calculateTotalValue();
   const enteredAmount = totalChipsToCashOut ? parseFloat(totalChipsToCashOut) : 0;
-  // Use chip breakdown if it has values, otherwise use entered amount
   const totalValue = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
-  const outstandingCredit = parseFloat(chipBalance?.outstanding_credit || 0);
-  const storedBalance = parseFloat(chipBalance?.stored_chips || 0);
-  // Ensure current chips is never negative (shouldn't happen, but safety check)
-  const currentChips = Math.max(0, parseFloat(chipBalance?.current_chip_balance || 0));
   
-  // If including stored balance, max amount is current chips + stored balance
-  const maxCashOutAmount = includeStoredBalance ? (currentChips + storedBalance) : currentChips;
+  // Calculate total payout including stored balance if toggle is ON
+  const totalPayoutAmount = includeStoredBalance ? totalValue + storedBalance : totalValue;
   
-  const creditToSettle = Math.min(totalValue, outstandingCredit);
-  const netCashPayout = Math.max(0, totalValue - outstandingCredit);
-  // Available Float = Primary wallet current (cash available with cashier)
   const availableFloat = dashboard?.wallets?.primary?.current ?? 0;
 
   useEffect(() => {
-    if ((selectedPlayerId !== null && selectedPlayerId !== undefined) && token) {
-      fetchChipBalance(selectedPlayerId);
+    if (selectedPlayerId !== null && selectedPlayerId !== undefined && token) {
+      fetchStoredBalance(selectedPlayerId);
     } else {
-      setChipBalance(null);
+      setStoredBalance(0);
     }
   }, [selectedPlayerId, token]);
 
-  const fetchChipBalance = async (playerId) => {
+  const fetchStoredBalance = async (playerId) => {
     setLoadingBalance(true);
     try {
-      const balance = await transactionService.getPlayerChipBalance(token, playerId);
-      console.log("Fetched chip balance:", balance); // Debug log
-      // Ensure balance object has required fields
-      setChipBalance({
-        current_chip_balance: balance?.current_chip_balance || 0,
-        stored_chips: balance?.stored_chips || 0,
-        outstanding_credit: balance?.outstanding_credit || 0,
-        ...balance
-      });
-
-      // Fetch last buy-in transaction
-      try {
-        const transactions = await transactionService.getPlayerTransactionHistory(token, playerId);
-        const buyInTransactions = transactions.filter(t => t.transaction_type === 'buy_in');
-        if (buyInTransactions.length > 0) {
-          const lastTransaction = buyInTransactions[0]; // Most recent first
-          setLastBuyIn(lastTransaction);
-        } else {
-          setLastBuyIn(null);
-        }
-      } catch (err) {
-        console.error("Error fetching last buy-in:", err);
-        setLastBuyIn(null);
-      }
+      const result = await transactionService.getPlayerStoredBalance(token, playerId);
+      setStoredBalance(parseFloat(result.stored_chips || 0));
     } catch (err) {
-      console.error("Error fetching chip balance:", err);
-      // Set default balance structure even on error
-      setChipBalance({
-        current_chip_balance: 0,
-        stored_chips: 0,
-        outstanding_credit: 0
-      });
+      console.error("Error fetching stored balance:", err);
+      setStoredBalance(0);
     } finally {
       setLoadingBalance(false);
     }
@@ -189,12 +150,6 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       currency: "INR",
       minimumFractionDigits: 0,
     }).format(amount || 0);
-  };
-
-  const handleChipCountChange = (denomination, value) => {
-    const numValue = Math.max(0, parseInt(value) || 0);
-    setChipsReceived(prev => ({ ...prev, [denomination]: numValue }));
-    setError("");
   };
 
   const handleSearchChange = (value) => {
@@ -211,7 +166,6 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     setSelectedPlayerId(player.player_id);
     setSelectedPlayerData(player);
     setSearchQuery(player.player_name);
-    // Reset cash out amount when selecting new player
     setTotalChipsToCashOut("");
     setIncludeStoredBalance(false);
     setFormData(prev => ({
@@ -224,9 +178,9 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     // Reset CEO permission when player changes
     setCeoPermissionConfirmed(false);
     
-    // ✅ Immediately fetch chip balance when player is selected
+    // Fetch stored balance
     if (token && player.player_id) {
-      fetchChipBalance(player.player_id);
+      fetchStoredBalance(player.player_id);
     }
     
     // Fetch full player data to check house player status
@@ -235,7 +189,6 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       const playerInfo = fullPlayerData?.data || fullPlayerData;
       setSelectedPlayerData(playerInfo);
       
-      // If house player, show permission modal
       if (playerInfo?.is_house_player === 1 || playerInfo?.is_house_player === true) {
         setShowCeoPermissionModal(true);
       }
@@ -257,17 +210,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       return;
     }
 
-    // Validate that we have either an entered amount or chip breakdown
-    const finalAmount = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
-    if (finalAmount === 0 || finalAmount <= 0) {
-      setError("Please enter the total chips to cash out");
+    const physicalChipsAmount = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
+    if (physicalChipsAmount === 0 || physicalChipsAmount <= 0) {
+      setError("Please enter the chips player is bringing to cash out");
       return;
     }
-    
-    // Note: We don't restrict to maxCashOutAmount because:
-    // - Player might be cashing out chips they won (brought chips to cashier)
-    // - Cashier can process any amount as long as they have float
-    // - The available balance display is just informational
 
     // Check if house player requires CEO permission
     const isHousePlayer = selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true;
@@ -277,41 +224,36 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       return;
     }
 
-    // ✅ REMOVED: Float check - let backend handle it
-    // The backend will create the transaction regardless of float
-    // Float is just cashier's working capital tracking
-
     setLoading(true);
     setError("");
 
     try {
-      // If including stored balance, we need to redeem it first
-      if (includeStoredBalance && storedBalance > 0) {
-        const storedAmountToRedeem = Math.min(totalValue - currentChips, storedBalance);
-        if (storedAmountToRedeem > 0) {
-          // Redeem stored balance first
-          await transactionService.redeemStoredChips(token, {
-            player_id: selectedPlayerId,
-            player_name: formData.player_name.trim(),
-            phone_number: formData.phone_number.trim(),
-            amount: storedAmountToRedeem,
-            notes: `Redeemed for cash payout`,
-          });
-        }
-      }
+      const physicalChipsAmount = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
+      
+      // Calculate total payout amount
+      const totalPayout = includeStoredBalance 
+        ? physicalChipsAmount + storedBalance 
+        : physicalChipsAmount;
 
+      // Create notes based on whether stored balance is included
+      const payoutNotes = formData.notes.trim() || (includeStoredBalance && storedBalance > 0
+        ? `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")} + Stored ₹${storedBalance.toLocaleString("en-IN")} = Total ₹${totalPayout.toLocaleString("en-IN")}`
+        : `Cash payout from physical chips (winnings)`);
+
+      // Create single cash payout transaction
       await transactionService.createCashPayout(token, {
         player_id: selectedPlayerId,
         player_name: formData.player_name.trim(),
         phone_number: formData.phone_number.trim(),
-        amount: totalValue,
-        chips_amount: totalValue,
-        chip_breakdown: chipsReceived,
-        notes: formData.notes.trim() || null,
+        amount: totalPayout, // Total cash to pay (physical + stored if toggle ON)
+        chips_amount: physicalChipsAmount, // Only physical chips being returned
+        chip_breakdown: chipsReceived, // Only physical chips
+        notes: payoutNotes,
+        include_stored_balance: includeStoredBalance, // Flag for backend
+        stored_balance_amount: includeStoredBalance ? storedBalance : 0, // Amount from stored
         ceo_permission_confirmed: isHousePlayer ? ceoPermissionConfirmed : undefined,
       });
 
-      // Refresh session to update wallet balances
       await refreshSession();
       
       setSuccess(true);
@@ -319,11 +261,9 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     } catch (err) {
       const errorMsg = err.message || "Failed to process cashout";
       
-      // ✅ Check if it's insufficient float error from backend
       if (errorMsg.includes('INSUFFICIENT_CASH') || errorMsg.includes('Need ₹')) {
-        // Parse the amount needed from error message
         const match = errorMsg.match(/Need ₹([\d,]+)/);
-        const needed = match ? parseInt(match[1].replace(/,/g, '')) : netCashPayout - availableFloat;
+        const needed = match ? parseInt(match[1].replace(/,/g, '')) : totalPayoutAmount - availableFloat;
         
         setNeededAmount(needed);
         setFloatAmount(String(needed));
@@ -348,8 +288,6 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       setNeededAmount(0);
       setError("");
       
-      // Show success message
-      setError("");
       alert(`✅ Float added successfully! Now click "Process Payout" again.`);
     } catch (err) {
       setError(err.message || "Failed to add cash float");
@@ -370,24 +308,15 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Success!</h2>
         <p className="text-gray-500 mb-6">Cash Out Processed</p>
         <div className="space-y-4 w-full max-w-sm">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-4 text-center">
-              <p className="text-sm text-blue-600 font-medium">Chips Returned</p>
-              <p className="text-2xl font-bold text-blue-800">{formatCurrency(totalValue)}</p>
-            </CardContent>
-          </Card>
-          {creditToSettle > 0 && (
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-orange-600 font-medium">Credit Auto-Settled</p>
-                <p className="text-2xl font-bold text-orange-800">{formatCurrency(creditToSettle)}</p>
-              </CardContent>
-            </Card>
-          )}
           <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
             <CardContent className="p-4 text-center">
-              <p className="text-sm text-emerald-600 font-medium">Cash Paid</p>
-              <p className="text-4xl font-black text-emerald-800">{formatCurrency(netCashPayout)}</p>
+              <p className="text-sm text-emerald-600 font-medium">Total Cash Paid</p>
+              <p className="text-4xl font-black text-emerald-800">{formatCurrency(totalPayoutAmount)}</p>
+              {includeStoredBalance && storedBalance > 0 && (
+                <p className="text-xs text-gray-600 mt-2">
+                  Physical: {formatCurrency(totalValue)} + Stored: {formatCurrency(storedBalance)}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -410,17 +339,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         </div>
       </div>
 
-      {/* ✅ Warning if payout exceeds float - but still allow transaction */}
-      {netCashPayout > availableFloat && totalValue > 0 && (
-        <Alert className="bg-warning/10 text-warning border-warning/20">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-sm">
-            Low Float Warning: This payout (₹{netCashPayout.toLocaleString()}) exceeds available float (₹{availableFloat.toLocaleString()}). Transaction will proceed, but consider adding ₹{(netCashPayout - availableFloat).toLocaleString()} float soon.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Player Search with Command */}
+      {/* Player Search */}
       <div className="space-y-2">
         <Label className="text-sm font-medium text-gray-900">Player</Label>
         
@@ -514,7 +433,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         </Popover>
       </div>
 
-      {/* Player Financial Summary - Clear and Simple */}
+      {/* Player Stored Balance Info + Toggle */}
       {(selectedPlayerId !== null && selectedPlayerId !== undefined) && (
         <>
           {loadingBalance ? (
@@ -523,222 +442,139 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
               <span className="text-sm">Loading balance...</span>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {/* Current Winnings */}
-              <Card className={`${
-                currentChips < 0 
-                  ? 'bg-red-50 border-red-200' 
-                  : currentChips === 0 
-                  ? 'bg-gray-50 border-gray-200' 
-                  : 'bg-green-50 border-green-200'
-              }`}>
-                <CardContent className="p-4">
-                  <p className="text-xs text-gray-600 mb-1">Current Winnings</p>
-                  <p className={`text-lg font-bold ${
-                    currentChips < 0 
-                      ? 'text-red-700' 
-                      : currentChips === 0 
-                      ? 'text-gray-700' 
-                      : 'text-green-700'
-                  }`}>
-                    ₹{currentChips.toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {currentChips < 0 ? 'Negative balance' : 'Chips in hand'}
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Stored Balance */}
-              <Card className="bg-blue-50 border-blue-200">
-                <CardContent className="p-4">
-                  <p className="text-xs text-gray-600 mb-1">Stored Balance</p>
-                  <p className="text-lg font-bold text-blue-700">
-                    ₹{storedBalance.toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">Available to redeem</p>
-                </CardContent>
-              </Card>
-
-              {/* Available Float */}
-              <Card className="bg-orange-50 border-orange-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Coins className="w-4 h-4 text-orange-600" />
-                    <p className="text-xs text-gray-600">Available Float</p>
-                  </div>
-                  <p className="text-lg font-bold text-orange-700">
-                    ₹{availableFloat.toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">Cashier's float</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Warning for negative balance */}
-      {currentChips < 0 && (
-        <Alert variant="destructive" className="bg-red-50 border-red-200">
-          <AlertCircle className="w-4 h-4 text-red-600" />
-          <AlertDescription className="text-sm text-red-700">
-            Player has a negative balance (₹{Math.abs(currentChips).toLocaleString("en-IN")}). 
-            Please record a winning adjustment to correct this before processing cash payout.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Cash Payout Options */}
-      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && !loadingBalance && (
-        <>
-          {/* Include Stored Balance Option */}
-          {storedBalance > 0 && (
-            <Card className="border-2 border-blue-200 bg-blue-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1">
-                    <Switch
-                      id="include-stored"
-                      checked={includeStoredBalance}
-                      onCheckedChange={(checked) => {
-                        setIncludeStoredBalance(checked);
-                        if (totalChipsToCashOut) {
-                          const numValue = parseFloat(totalChipsToCashOut) || 0;
-                          if (numValue > 0) {
-                            const breakdown = {
-                              chips_10000: Math.floor(numValue / 10000),
-                              chips_5000: Math.floor((numValue % 10000) / 5000),
-                              chips_1000: Math.floor((numValue % 5000) / 1000),
-                              chips_500: Math.floor((numValue % 1000) / 500),
-                              chips_100: Math.floor((numValue % 500) / 100),
-                            };
-                            setChipsReceived(breakdown);
-                          }
-                        }
-                      }}
-                    />
-                    <div className="flex-1">
-                      <Label htmlFor="include-stored" className="text-sm font-medium text-gray-900 cursor-pointer">
-                        Include Stored Balance
-                      </Label>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Stored: ₹{storedBalance.toLocaleString("en-IN")} • Total available: ₹{(currentChips + storedBalance).toLocaleString("en-IN")}
-                      </p>
+            <>
+              {/* Stored Balance Display + Toggle */}
+              {storedBalance > 0 && (
+                <Card className="border-2 border-blue-200 bg-blue-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-600 mb-1">Player's Stored Balance</p>
+                        <p className="text-2xl font-bold text-blue-700">
+                          ₹{storedBalance.toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Label htmlFor="include-stored" className="text-sm font-medium text-gray-900 cursor-pointer">
+                          Include
+                        </Label>
+                        <Switch
+                          id="include-stored"
+                          checked={includeStoredBalance}
+                          onCheckedChange={setIncludeStoredBalance}
+                        />
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Total Chips to Cash Out */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-900">Total Chips to Cash Out (₹)</Label>
-            <Input
-              type="number"
-              min="0"
-              value={totalChipsToCashOut}
-              onChange={(e) => {
-                const value = e.target.value;
-                const numValue = parseFloat(value) || 0;
-                setTotalChipsToCashOut(value);
-                if (error && error.includes('Maximum')) {
-                  setError("");
-                }
-                if (value && numValue > 0) {
-                  const breakdown = {
-                    chips_10000: Math.floor(numValue / 10000),
-                    chips_5000: Math.floor((numValue % 10000) / 5000),
-                    chips_1000: Math.floor((numValue % 5000) / 1000),
-                    chips_500: Math.floor((numValue % 1000) / 500),
-                    chips_100: Math.floor((numValue % 500) / 100),
-                  };
-                  setChipsReceived(breakdown);
-                } else if (!value || value === '') {
-                  setChipsReceived({ chips_100: 0, chips_500: 0, chips_1000: 0, chips_5000: 0, chips_10000: 0 });
-                }
-              }}
-              className="h-12 text-lg"
-              placeholder="Enter amount"
-            />
-            <p className="text-xs text-gray-500">
-              Available: ₹{maxCashOutAmount.toLocaleString("en-IN")} {includeStoredBalance ? '(Winnings + Stored)' : '(Winnings only)'}
-              {parseFloat(totalChipsToCashOut || 0) > maxCashOutAmount && (
-                <span className="text-orange-600 font-medium ml-2">
-                  • Player may be cashing out chips they won
-                </span>
+                    {includeStoredBalance && (
+                      <div className="bg-blue-100 rounded-lg p-3 text-xs text-blue-800">
+                        ✅ Stored balance will be added to total payout
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
-            </p>
-          </div>
 
-          {/* Chip Breakdown */}
-          {((totalChipsToCashOut && parseFloat(totalChipsToCashOut) > 0) || chipBreakdownTotal > 0) && (
-            <Card className="bg-gradient-to-br from-slate-50 to-gray-100 border-slate-200 shadow-md">
-              <CardContent className="pt-5 pb-4">
-                <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-                  <Coins className="w-4 h-4" />
-                  Chip Breakdown
+              {/* Physical Chips Input */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-900">
+                  Physical Chips Player is Bringing (₹)
                 </Label>
-                <ChipInputGrid
-                  chips={chipsReceived}
-                  onChange={(newChips) => {
-                    setChipsReceived(newChips);
-                    const newTotal = 
-                      (parseInt(newChips.chips_100) || 0) * 100 +
-                      (parseInt(newChips.chips_500) || 0) * 500 +
-                      (parseInt(newChips.chips_1000) || 0) * 1000 +
-                      (parseInt(newChips.chips_5000) || 0) * 5000 +
-                      (parseInt(newChips.chips_10000) || 0) * 10000;
-                    if (newTotal !== parseFloat(totalChipsToCashOut || 0)) {
-                      setTotalChipsToCashOut(String(newTotal));
+                <Input
+                  type="number"
+                  min="0"
+                  value={totalChipsToCashOut}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const numValue = parseFloat(value) || 0;
+                    setTotalChipsToCashOut(value);
+                    if (error) setError("");
+                    
+                    if (value && numValue > 0) {
+                      const breakdown = {
+                        chips_10000: Math.floor(numValue / 10000),
+                        chips_5000: Math.floor((numValue % 10000) / 5000),
+                        chips_1000: Math.floor((numValue % 5000) / 1000),
+                        chips_500: Math.floor((numValue % 1000) / 500),
+                        chips_100: Math.floor((numValue % 500) / 100),
+                      };
+                      setChipsReceived(breakdown);
+                    } else {
+                      setChipsReceived({ chips_100: 0, chips_500: 0, chips_1000: 0, chips_5000: 0, chips_10000: 0 });
                     }
                   }}
-                  title="Chips to Give"
-                  showTotal={true}
-                  totalLabel="Total Chips Value"
+                  className="h-12 text-lg"
+                  placeholder="Enter chips player is bringing"
                 />
-              </CardContent>
-            </Card>
+                <p className="text-xs text-gray-500">
+                  Count the physical chips the player is bringing to cash out (winnings from table)
+                </p>
+              </div>
+
+              {/* Chip Breakdown */}
+              {((totalChipsToCashOut && parseFloat(totalChipsToCashOut) > 0) || chipBreakdownTotal > 0) && (
+                <Card className="bg-gradient-to-br from-slate-50 to-gray-100 border-slate-200 shadow-md">
+                  <CardContent className="pt-5 pb-4">
+                    <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+                      <Coins className="w-4 h-4" />
+                      Chip Breakdown
+                    </Label>
+                    <ChipInputGrid
+                      chips={chipsReceived}
+                      onChange={(newChips) => {
+                        const newTotal = 
+                          (parseInt(newChips.chips_100) || 0) * 100 +
+                          (parseInt(newChips.chips_500) || 0) * 500 +
+                          (parseInt(newChips.chips_1000) || 0) * 1000 +
+                          (parseInt(newChips.chips_5000) || 0) * 5000 +
+                          (parseInt(newChips.chips_10000) || 0) * 10000;
+                        
+                        setChipsReceived(newChips);
+                        if (newTotal !== parseFloat(totalChipsToCashOut || 0)) {
+                          setTotalChipsToCashOut(String(newTotal));
+                        }
+                      }}
+                      title="Physical Chips"
+                      showTotal={true}
+                      totalLabel="Total Physical Chips"
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Payout Summary */}
+              {totalValue > 0 && (
+                <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+                  <CardContent className="p-4 space-y-3">
+                    <p className="text-sm font-semibold text-emerald-900">Payout Summary</p>
+                    
+                    <div className="flex justify-between text-sm pt-2 border-t border-emerald-200">
+                      <span className="text-gray-700">Physical chips</span>
+                      <span className="font-mono font-semibold text-gray-900">
+                        ₹{totalValue.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    
+                    {includeStoredBalance && storedBalance > 0 && (
+                      <div className="flex justify-between text-sm pt-2 border-t border-emerald-200">
+                        <span className="text-gray-700">+ Stored balance</span>
+                        <span className="font-mono font-semibold text-gray-900">
+                          ₹{storedBalance.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className="flex justify-between text-sm pt-2 border-t-2 border-emerald-300">
+                      <span className="font-bold text-emerald-900">Total Cash to Pay</span>
+                      <span className="font-mono font-bold text-emerald-700 text-xl">
+                        ₹{totalPayoutAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
         </>
-      )}
-
-      {/* Settlement Preview */}
-      {totalValue > 0 && (selectedPlayerId !== null && selectedPlayerId !== undefined) && (
-        <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-          <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-semibold text-gray-900">Payout Breakdown</p>
-            
-            {/* Credit settlement first */}
-            {creditToSettle > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Credit to settle</span>
-                <span className="font-mono font-semibold text-red-600">
-                  -₹{creditToSettle.toLocaleString("en-IN")}
-                </span>
-              </div>
-            )}
-            
-            {/* Cash to give (after credit) */}
-            <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
-              <span className="text-gray-600">Cash to give</span>
-              <span className="font-mono font-semibold text-green-600 text-lg">
-                ₹{netCashPayout.toLocaleString("en-IN")}
-              </span>
-            </div>
-            
-            {/* Credit after payout */}
-            {outstandingCredit > 0 && (
-              <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
-                <span className="text-gray-600">Credit after</span>
-                <span className="font-mono font-semibold text-gray-900">
-                  ₹{Math.max(0, outstandingCredit - totalValue).toLocaleString("en-IN")}
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       )}
 
       {/* Notes */}
@@ -763,7 +599,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         </div>
       )}
 
-      {/* House Player CEO Permission Warning */}
+      {/* House Player CEO Permission */}
       {selectedPlayerData && (selectedPlayerData.is_house_player === 1 || selectedPlayerData.is_house_player === true) && (
         <div className={cn(
           "p-4 rounded-lg border-2 space-y-3",
@@ -795,13 +631,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
               )}>
                 {ceoPermissionConfirmed 
                   ? "CEO Permission Granted" 
-                  : `${selectedPlayerData.player_name} requires CEO permission for cashout`
-                }
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {ceoPermissionConfirmed 
-                  ? "You may proceed with the payout." 
-                  : "Please confirm you have received verbal/written approval from CEO before proceeding."
+                  : `${selectedPlayerData.player_name} requires CEO permission`
                 }
               </p>
             </div>
@@ -814,7 +644,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
               className="w-full bg-[hsl(280,70%,50%)] hover:bg-[hsl(280,70%,45%)] text-white font-semibold"
             >
               <ShieldAlert className="h-4 w-4 mr-2" />
-              Confirm CEO Permission Received
+              Confirm CEO Permission
             </Button>
           )}
         </div>
@@ -841,27 +671,22 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
             ((selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed)
           }
           variant="destructive"
-          className={cn(
-            "flex-1 font-semibold",
-            ((selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed) && "opacity-50"
-          )}
+          className="flex-1 font-semibold"
         >
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Processing...
             </>
-          ) : (selectedPlayerData?.is_house_player === 1 || selectedPlayerData?.is_house_player === true) && !ceoPermissionConfirmed ? (
-            "CEO Permission Required"
           ) : (
-            `Process Payout ${totalValue > 0 ? `• ${formatCurrency(netCashPayout)}` : ""}`
+            `Process Payout ${totalPayoutAmount > 0 ? `• ${formatCurrency(totalPayoutAmount)}` : ""}`
           )}
         </Button>
       </div>
 
       {/* CEO Permission Modal */}
       <Dialog open={showCeoPermissionModal} onOpenChange={setShowCeoPermissionModal}>
-        <DialogContent className="sm:max-w-md bg-card border-border">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-[hsl(280,70%,50%)]/10">
@@ -889,9 +714,6 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                   <p className="text-sm text-foreground font-medium mb-2">
                     This player requires CEO permission for cashout.
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Please confirm you have received verbal/written approval from CEO before proceeding.
-                  </p>
                 </div>
                 <div className="space-y-3">
                   <Button
@@ -903,7 +725,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                     className="w-full bg-[hsl(280,70%,50%)] hover:bg-[hsl(280,70%,45%)] text-white h-12 font-semibold"
                   >
                     <Check className="w-4 h-4 mr-2" />
-                    Confirm CEO Permission Received
+                    Confirm CEO Permission
                   </Button>
                   <Button
                     onClick={() => setShowCeoPermissionModal(false)}
@@ -919,7 +741,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Add Float Modal - Only shown when backend explicitly asks for it */}
+      {/* Add Float Modal */}
       <Dialog open={showAddFloatModal} onOpenChange={setShowAddFloatModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -931,7 +753,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 text-warning text-sm border border-warning/20">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>Backend requires <strong>{formatCurrency(neededAmount)}</strong> more float to process this payout</span>
+              <span>Need <strong>{formatCurrency(neededAmount)}</strong> more float</span>
             </div>
 
             <div className="space-y-2">
@@ -941,7 +763,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                 value={floatAmount}
                 onChange={(e) => setFloatAmount(e.target.value)}
                 min={neededAmount}
-                className="font-mono text-lg text-center border-border focus-visible:ring-ring"
+                className="font-mono text-lg text-center"
               />
             </div>
 
@@ -962,14 +784,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                 ) : (
                   <>
                     <Plus className="w-4 h-4 mr-2" />
-                    Add {formatCurrency(parseFloat(floatAmount) || 0)}
+                    Add Float
                   </>
                 )}
               </Button>
             </div>
-            <p className="text-xs text-center text-muted-foreground">
-              After adding float, click "Process Payout" again
-            </p>
           </div>
         </DialogContent>
       </Dialog>
