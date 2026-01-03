@@ -1170,18 +1170,19 @@ const BuyInForm = ({ onSuccess, onCancel }) => {
       {/* Amount Input */}
       {((selectedPlayerId !== null && selectedPlayerId !== undefined) || isNewPlayer) && (
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-900">Amount (₹)</Label>
+          <Label className="text-sm font-medium text-gray-900">
+            {useStoredBalance ? 'Amount to Redeem (₹)' : 'Amount (₹)'}
+          </Label>
           <Input
             type="number"
-            placeholder="Enter amount (e.g., 10000)"
+            placeholder={useStoredBalance ? "Enter amount to redeem" : "Enter amount (e.g., 10000)"}
             value={formData.amount}
             onChange={(e) => handleChange('amount', e.target.value)}
             className="h-12 text-lg"
             min="0"
-            disabled={useStoredBalance}
           />
           {useStoredBalance && (
-            <p className="text-xs text-gray-500">Using stored balance: {formatCurrency(storedBalance)}</p>
+            <p className="text-xs text-gray-500">Available stored balance: {formatCurrency(storedBalance)}</p>
           )}
           {formData.amount && parseFloat(formData.amount) > 0 && !activePromotion && !checkingPromotion && !useStoredBalance && (
             <p className="text-xs text-gray-500">Enter amount to check for available bonus promotions</p>
