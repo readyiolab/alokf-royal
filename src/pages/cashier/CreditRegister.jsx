@@ -30,7 +30,16 @@ import CashierLayout from '../../components/layouts/CashierLayout';
 import TransactionCardList from '../../components/transactions/TransactionCardList';
 
 const CreditRegister = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // Helper to get today's date in IST timezone (YYYY-MM-DD format)
+  const getTodayIST = () => {
+    const now = new Date();
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+    const istTime = new Date(now.getTime() + istOffset);
+    return istTime.toISOString().split('T')[0];
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getTodayIST());
   const [registerData, setRegisterData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -176,7 +185,8 @@ const CreditRegister = () => {
     }
   };
 
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  // Check if selected date is today (using IST timezone)
+  const isToday = selectedDate === getTodayIST();
 
   // Filter transactions based on active filter
   const filterTransactions = (transactions) => {

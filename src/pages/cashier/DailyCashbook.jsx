@@ -38,7 +38,16 @@ import CashierLayout from '../../components/layouts/CashierLayout';
 import TransactionCardList from '../../components/transactions/TransactionCardList';
 
 const DailyCashbook = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // Helper to get today's date in IST timezone (YYYY-MM-DD format)
+  const getTodayIST = () => {
+    const now = new Date();
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+    const istTime = new Date(now.getTime() + istOffset);
+    return istTime.toISOString().split('T')[0];
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getTodayIST());
   const [cashbookData, setCashbookData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -98,38 +107,42 @@ const DailyCashbook = () => {
   };
 
   const setQuickDateRange = (range) => {
-    const today = new Date();
+    // Helper to get date in IST
+    const getDateIST = (daysOffset = 0) => {
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istTime = new Date(now.getTime() + istOffset + (daysOffset * 24 * 60 * 60 * 1000));
+      return istTime.toISOString().split('T')[0];
+    };
+
+    const today = getDateIST();
     let start, end;
     
     switch (range) {
       case 'today':
-        start = end = today.toISOString().split('T')[0];
+        start = end = today;
         break;
       case 'yesterday':
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        start = end = yesterday.toISOString().split('T')[0];
+        start = end = getDateIST(-1);
         break;
       case 'last7':
-        end = today.toISOString().split('T')[0];
-        const last7 = new Date(today);
-        last7.setDate(last7.getDate() - 7);
-        start = last7.toISOString().split('T')[0];
+        end = today;
+        start = getDateIST(-7);
         break;
       case 'last30':
-        end = today.toISOString().split('T')[0];
-        const last30 = new Date(today);
-        last30.setDate(last30.getDate() - 30);
-        start = last30.toISOString().split('T')[0];
+        end = today;
+        start = getDateIST(-30);
         break;
       case 'thisMonth':
-        start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-        end = today.toISOString().split('T')[0];
+        const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+        start = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), 1)).toISOString().split('T')[0];
+        end = today;
         break;
       case 'lastMonth':
-        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastMonthIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+        const lastMonth = new Date(Date.UTC(lastMonthIST.getUTCFullYear(), lastMonthIST.getUTCMonth() - 1, 1));
         start = lastMonth.toISOString().split('T')[0];
-        end = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+        end = new Date(Date.UTC(lastMonthIST.getUTCFullYear(), lastMonthIST.getUTCMonth(), 0)).toISOString().split('T')[0];
         break;
     }
     
@@ -193,7 +206,8 @@ const DailyCashbook = () => {
     }
   };
 
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  // Check if selected date is today (using IST timezone)
+  const isToday = selectedDate === getTodayIST();
 
   // Filter transactions based on active filter
   const filterTransactions = (transactions) => {

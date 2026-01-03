@@ -205,12 +205,13 @@ export const SessionProvider = ({ children }) => {
     if (token && user) {
       checkSessionStatus();
       
-      const interval = setInterval(() => {
-        console.log('⏰ Auto-refreshing session status...');
-        checkSessionStatus();
-      }, 30000);
+      // ❌ REMOVED: Auto-refresh causes UI blinking when modals are open
+      // const interval = setInterval(() => {
+      //   console.log('⏰ Auto-refreshing session status...');
+      //   checkSessionStatus();
+      // }, 30000);
       
-      return () => clearInterval(interval);
+      // return () => clearInterval(interval);
     } else {
       setIsLoadingSession(false);
       setSessionStatus(null);
