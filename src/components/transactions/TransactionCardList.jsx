@@ -85,7 +85,14 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
   const getTransactionTypeInfo = (t) => {
     const type = t.transaction_type || '';
     const activityType = t.activity_type || '';
-    const isInflow = ['buy_in', 'settle_credit', 'add_float', 'deposit_cash'].includes(type);
+    
+    // For cash flow: inflow means money coming IN to cashier
+    // For chip ledger: dealer_tip and player_expense mean chips coming IN to cashier
+    let isInflow = ['buy_in', 'settle_credit', 'add_float', 'deposit_cash'].includes(type);
+    
+    // Special case: dealer tips and player expenses - chips come IN to cashier
+    // (even though cash goes OUT, the chips come back)
+    const isChipInflow = activityType === 'dealer_tip' || activityType === 'player_expense';
     
     // Proper naming convention
     const typeLabels = {
@@ -95,7 +102,9 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
       'return_chips': 'Return Chips',
       'settle_credit': 'Settle Credit',
       'add_float': 'Add Float',
-      'expense': activityType === 'club_expense' ? 'Club Expense' : 'Expense',
+      'expense': activityType === 'club_expense' ? 'Club Expense' : 
+                 activityType === 'dealer_tip' ? 'Dealer Tip' :
+                 activityType === 'player_expense' ? 'Player Expense' : 'Expense',
       'redeem_stored': 'Redeem Stored',
     };
     
@@ -109,12 +118,27 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
       }
     }
     
+    // For dealer tips, show as "Dealer Tip"
+    if (activityType === 'dealer_tip') {
+      label = 'Dealer Tip';
+    }
+    
+    // For player expenses, show as "Player Expense"
+    if (activityType === 'player_expense') {
+      label = 'Player Expense';
+    }
+    
+    // For chip ledger display: dealer tips and player expenses show as chips IN (green)
+    // because chips are being returned to cashier even though cash goes out
+    const displayAsInflow = isInflow || isChipInflow;
+    
     return {
       label,
-      isInflow,
-      icon: isInflow ? TrendingUp : TrendingDown,
-      iconColor: isInflow ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50',
-      amountColor: isInflow ? 'text-green-600' : 'text-red-600',
+      isInflow: displayAsInflow,
+      isChipInflow,  // Extra flag to indicate chips coming in
+      icon: displayAsInflow ? TrendingUp : TrendingDown,
+      iconColor: displayAsInflow ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50',
+      amountColor: displayAsInflow ? 'text-green-600' : 'text-red-600',
     };
   };
 

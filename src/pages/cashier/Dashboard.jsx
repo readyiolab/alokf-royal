@@ -121,7 +121,7 @@ const CashierDashboard = () => {
               <div className="space-y-1 pt-2">
                 <div className="flex justify-between text-sm"><span className="text-gray-600">Payouts</span><span className="font-semibold text-black">{formatCurrency(totalPayouts)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">Dealer Tips (Cash)</span><span className="font-semibold text-black">{formatCurrency(dealerTips)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-gray-600">Player Expenses (Vendors)</span><span className="font-semibold text-black">{formatCurrency(0)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Player Expenses (Vendors)</span><span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.player_expenses || 0)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">Club Expenses</span><span className="font-semibold text-black">{formatCurrency(clubExpenses)}</span></div>
               </div>
             </CardContent>

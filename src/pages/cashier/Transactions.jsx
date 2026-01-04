@@ -518,7 +518,7 @@ const CashierTransactions = () => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Player Expenses (Vendors)</span>
-                    <span className="font-semibold text-black">{formatCurrency(0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.player_expenses || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Club Expenses</span>
