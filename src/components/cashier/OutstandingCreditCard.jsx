@@ -9,6 +9,7 @@ import { AlertCircle } from 'lucide-react';
 
 const OutstandingCreditCard = ({ dashboard, formatCurrency }) => {
   const outstandingCredit = dashboard?.outstanding_credit || 0;
+  const totalCreditIssued = dashboard?.total_credit_issued || 0;
   const outstandingCredits = dashboard?.outstanding_credits || [];
   const creditCount = Array.isArray(outstandingCredits) ? outstandingCredits.length : 0;
 
@@ -22,6 +23,12 @@ const OutstandingCreditCard = ({ dashboard, formatCurrency }) => {
           <div className="flex justify-between items-center">
             <span className="text-xs text-gray-500">Total Credit Issued</span>
             <span className="text-lg font-bold text-orange-700">
+              {formatCurrency(totalCreditIssued)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-500">Outstanding</span>
+            <span className={`text-sm font-semibold ${outstandingCredit > 0 ? 'text-red-600' : 'text-green-600'}`}>
               {formatCurrency(outstandingCredit)}
             </span>
           </div>

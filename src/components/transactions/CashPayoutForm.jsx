@@ -62,6 +62,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   // Toggle to include stored balance
   const [includeStoredBalance, setIncludeStoredBalance] = useState(false);
   
+  // Toggle to adjust outstanding credit
+  const [adjustOutstandingCredit, setAdjustOutstandingCredit] = useState(false);
+  const [outstandingCredit, setOutstandingCredit] = useState(0);
+  const [loadingCredit, setLoadingCredit] = useState(false);
+  
   // Add Cash Float Modal
   const [showAddFloatModal, setShowAddFloatModal] = useState(false);
   const [floatAmount, setFloatAmount] = useState("");
@@ -119,15 +124,23 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   const totalValue = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
   
   // Calculate total payout including stored balance if toggle is ON
-  const totalPayoutAmount = includeStoredBalance ? totalValue + storedBalance : totalValue;
+  let totalPayoutAmount = includeStoredBalance ? totalValue + storedBalance : totalValue;
+  
+  // Adjust for outstanding credit if toggle is ON
+  if (adjustOutstandingCredit && outstandingCredit > 0) {
+    const creditToDeduct = Math.min(outstandingCredit, totalPayoutAmount);
+    totalPayoutAmount = Math.max(0, totalPayoutAmount - creditToDeduct);
+  }
   
   const availableFloat = dashboard?.wallets?.primary?.current ?? 0;
 
   useEffect(() => {
     if (selectedPlayerId !== null && selectedPlayerId !== undefined && token) {
       fetchStoredBalance(selectedPlayerId);
+      fetchOutstandingCredit(selectedPlayerId);
     } else {
       setStoredBalance(0);
+      setOutstandingCredit(0);
     }
   }, [selectedPlayerId, token]);
 
@@ -141,6 +154,22 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       setStoredBalance(0);
     } finally {
       setLoadingBalance(false);
+    }
+  };
+
+  const fetchOutstandingCredit = async (playerId) => {
+    setLoadingCredit(true);
+    try {
+      const sessionId = dashboard?.session?.session_id;
+      const result = await playerService.getPlayerCreditStatus(playerId, sessionId);
+      const creditData = result?.data || result;
+      const totalOutstanding = parseFloat(creditData?.total_outstanding || 0);
+      setOutstandingCredit(totalOutstanding);
+    } catch (err) {
+      console.error("Error fetching outstanding credit:", err);
+      setOutstandingCredit(0);
+    } finally {
+      setLoadingCredit(false);
     }
   };
 
@@ -168,6 +197,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     setSearchQuery(player.player_name);
     setTotalChipsToCashOut("");
     setIncludeStoredBalance(false);
+    setAdjustOutstandingCredit(false);
     setFormData(prev => ({
       ...prev,
       player_name: player.player_name,
@@ -230,27 +260,42 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     try {
       const physicalChipsAmount = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
       
-      // Calculate total payout amount
-      const totalPayout = includeStoredBalance 
+      // Calculate total payout amount (before credit adjustment)
+      const totalPayoutBeforeCredit = includeStoredBalance 
         ? physicalChipsAmount + storedBalance 
         : physicalChipsAmount;
+      
+      // Backend will handle credit adjustment, but we pass the pre-adjusted amount
+      // The backend will calculate the final net payout based on the toggle
 
-      // Create notes based on whether stored balance is included
-      const payoutNotes = formData.notes.trim() || (includeStoredBalance && storedBalance > 0
-        ? `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")} + Stored ₹${storedBalance.toLocaleString("en-IN")} = Total ₹${totalPayout.toLocaleString("en-IN")}`
-        : `Cash payout from physical chips (winnings)`);
+      // Create notes based on whether stored balance is included and credit is adjusted
+      let payoutNotes = formData.notes.trim();
+      if (!payoutNotes) {
+        if (adjustOutstandingCredit && outstandingCredit > 0) {
+          payoutNotes = `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")}`;
+          if (includeStoredBalance && storedBalance > 0) {
+            payoutNotes += ` + Stored ₹${storedBalance.toLocaleString("en-IN")}`;
+          }
+          payoutNotes += ` - Credit ₹${Math.min(outstandingCredit, totalPayoutBeforeCredit).toLocaleString("en-IN")} = Net ₹${totalPayoutAmount.toLocaleString("en-IN")}`;
+        } else if (includeStoredBalance && storedBalance > 0) {
+          payoutNotes = `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")} + Stored ₹${storedBalance.toLocaleString("en-IN")} = Total ₹${totalPayoutBeforeCredit.toLocaleString("en-IN")}`;
+        } else {
+          payoutNotes = `Cash payout from physical chips (winnings)`;
+        }
+      }
 
       // Create single cash payout transaction
       await transactionService.createCashPayout(token, {
         player_id: selectedPlayerId,
         player_name: formData.player_name.trim(),
         phone_number: formData.phone_number.trim(),
-        amount: totalPayout, // Total cash to pay (physical + stored if toggle ON)
+        amount: totalPayoutBeforeCredit, // Total cash to pay before credit adjustment (backend will adjust)
         chips_amount: physicalChipsAmount, // Only physical chips being returned
         chip_breakdown: chipsReceived, // Only physical chips
         notes: payoutNotes,
         include_stored_balance: includeStoredBalance, // Flag for backend
         stored_balance_amount: includeStoredBalance ? storedBalance : 0, // Amount from stored
+        adjust_outstanding_credit: adjustOutstandingCredit, // Toggle to adjust outstanding credit
         ceo_permission_confirmed: isHousePlayer ? ceoPermissionConfirmed : undefined,
       });
 
@@ -443,6 +488,41 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
             </div>
           ) : (
             <>
+              {/* Outstanding Credit Display + Toggle */}
+              {outstandingCredit > 0 && (
+                <Card className="border-2 border-orange-200 bg-orange-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-600 mb-1">Outstanding Credit</p>
+                        <p className="text-2xl font-bold text-orange-700">
+                          ₹{outstandingCredit.toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Label htmlFor="adjust-credit" className="text-sm font-medium text-gray-900 cursor-pointer">
+                          Adjust
+                        </Label>
+                        <Switch
+                          id="adjust-credit"
+                          checked={adjustOutstandingCredit}
+                          onCheckedChange={setAdjustOutstandingCredit}
+                        />
+                      </div>
+                    </div>
+                    {adjustOutstandingCredit ? (
+                      <div className="bg-orange-100 rounded-lg p-3 text-xs text-orange-800">
+                        ✅ Outstanding credit will be deducted from payout amount
+                      </div>
+                    ) : (
+                      <div className="bg-gray-100 rounded-lg p-3 text-xs text-gray-600">
+                        ℹ️ Outstanding credit will remain unchanged (full payout amount)
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Stored Balance Display + Toggle */}
               {storedBalance > 0 && (
                 <Card className="border-2 border-blue-200 bg-blue-50">
@@ -563,10 +643,21 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                       </div>
                     )}
                     
+                    {adjustOutstandingCredit && outstandingCredit > 0 && (
+                      <div className="flex justify-between text-sm pt-2 border-t border-emerald-200">
+                        <span className="text-gray-700">- Outstanding credit</span>
+                        <span className="font-mono font-semibold text-red-600">
+                          -₹{Math.min(outstandingCredit, totalValue + (includeStoredBalance ? storedBalance : 0)).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
+                    
                     <div className="flex justify-between text-sm pt-2 border-t-2 border-emerald-300">
                       <span className="font-bold text-emerald-900">Total Cash to Pay</span>
                       <span className="font-mono font-bold text-emerald-700 text-xl">
-                        ₹{totalPayoutAmount.toLocaleString("en-IN")}
+                        ₹{adjustOutstandingCredit && outstandingCredit > 0 
+                          ? Math.max(0, totalPayoutAmount - Math.min(outstandingCredit, totalValue + (includeStoredBalance ? storedBalance : 0))).toLocaleString("en-IN")
+                          : totalPayoutAmount.toLocaleString("en-IN")}
                       </span>
                     </div>
                   </CardContent>

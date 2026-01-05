@@ -14,11 +14,15 @@ const ViewFloatModal = ({ open, onOpenChange }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // ✅ FIXED: Check for null/undefined explicitly since session_id can be 0
-    if (open && session?.session_id !== null && session?.session_id !== undefined) {
+    // ✅ FIXED: Only fetch if session is active (not closed)
+    if (open && session?.session_id !== null && session?.session_id !== undefined && session?.is_closed === 0) {
       fetchFloatHistory();
+    } else if (open && (session?.is_closed === 1 || !session)) {
+      // Clear history if session is closed or doesn't exist
+      setFloatHistory([]);
+      setLoading(false);
     }
-  }, [open, session?.session_id]);
+  }, [open, session?.session_id, session?.is_closed]);
 
   const fetchFloatHistory = async () => {
     try {

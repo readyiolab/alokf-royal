@@ -18,8 +18,8 @@ async createPlayer(data) {
     // ✅ Return the actual player data
     return response.data || response;
   } catch (error) {
-    // ✅ Don't re-throw through handleError, it already throws
-    apiService.handleError(error);
+    // ✅ Extract and throw error message properly
+    throw apiService.handleError(error);
   }
 }
 
@@ -174,6 +174,79 @@ async createPlayer(data) {
       const response = await apiService.post(
         `/players/${playerId}/toggle-house-player`,
         {},
+        token
+      );
+      return response;
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  // ✅ Blacklist/Block player
+  async blacklistPlayer(playerId, reason) {
+    try {
+      const token = this.getToken();
+      const response = await apiService.post(
+        `/players/${playerId}/blacklist`,
+        { reason },
+        token
+      );
+      return response;
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  // ✅ Unblacklist/Unblock player
+  async unblacklistPlayer(playerId) {
+    try {
+      const token = this.getToken();
+      const response = await apiService.post(
+        `/players/${playerId}/unblacklist`,
+        {},
+        token
+      );
+      return response;
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  // ✅ Get player notes
+  async getPlayerNotes(playerId) {
+    try {
+      const token = this.getToken();
+      const response = await apiService.get(
+        `/players/${playerId}/notes`,
+        token
+      );
+      return response.data || response || [];
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  // ✅ Get player bonus
+  async getPlayerBonus(playerId) {
+    try {
+      const token = this.getToken();
+      const response = await apiService.get(
+        `/players/${playerId}/bonus`,
+        token
+      );
+      return response.data || response || { total_bonus: 0, total_claims: 0 };
+    } catch (error) {
+      throw apiService.handleError(error);
+    }
+  }
+
+  // ✅ Add player note
+  async addPlayerNote(playerId, noteData) {
+    try {
+      const token = this.getToken();
+      const response = await apiService.post(
+        `/players/${playerId}/notes`,
+        noteData,
         token
       );
       return response;

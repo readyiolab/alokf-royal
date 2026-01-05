@@ -476,7 +476,7 @@ const CashierTransactions = () => {
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Cash in Hand</span>
-                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.secondary?.current || 0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.cash_balance || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Online Money</span>

@@ -21,19 +21,10 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { UserPlus, Edit2, Trash2, Settings2 } from "lucide-react";
+import { UserPlus, Edit2, Settings2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import userService from "../../services/user.service";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import CashierDetailsModal from "../../components/cashier/CashierDetailsModal";
 
 const CashierManagement = () => {
   const [cashiers, setCashiers] = useState([]);
@@ -41,7 +32,7 @@ const CashierManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedCashier, setSelectedCashier] = useState(null);
   const [filterRole, setFilterRole] = useState("cashier");
   const [filterShift, setFilterShift] = useState("all");
@@ -143,27 +134,6 @@ const CashierManagement = () => {
     }
   };
 
-  // Handle delete cashier
-  const handleDeleteCashier = async () => {
-    if (!selectedCashier) return;
-
-    try {
-      const response = await userService.deactivateUser(selectedCashier.cashier_id);
-
-      if (response.success) {
-        toast.success("Cashier deactivated successfully");
-        setShowDeleteDialog(false);
-        setSelectedCashier(null);
-        fetchCashiers();
-      } else {
-        toast.error(response.message || "Failed to delete cashier");
-      }
-    } catch (err) {
-      console.error("Error deleting cashier:", err);
-      toast.error(err.message || "Failed to delete cashier");
-    }
-  };
-
   // Open edit dialog
   const openEditDialog = (cashier) => {
     setSelectedCashier(cashier);
@@ -173,12 +143,6 @@ const CashierManagement = () => {
       email: cashier.email || "",
     });
     setShowEditDialog(true);
-  };
-
-  // Open delete dialog
-  const openDeleteDialog = (cashier) => {
-    setSelectedCashier(cashier);
-    setShowDeleteDialog(true);
   };
 
   // Reset form
@@ -281,7 +245,11 @@ const CashierManagement = () => {
             {filteredCashiers.map((cashier) => (
               <Card
                 key={cashier.cashier_id}
-                className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => {
+                  setSelectedCashier(cashier);
+                  setShowDetailsModal(true);
+                }}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between">
@@ -311,18 +279,27 @@ const CashierManagement = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 text-gray-600 hover:text-gray-900"
-                        onClick={() => openEditDialog(cashier)}
+                        className="h-8 w-8 p-0 text-gray-600 hover:text-blue-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCashier(cashier);
+                          setShowDetailsModal(true);
+                        }}
+                        title="View Details"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Eye className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 text-gray-600 hover:text-red-600"
-                        onClick={() => openDeleteDialog(cashier)}
+                        className="h-8 w-8 p-0 text-gray-600 hover:text-gray-900"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditDialog(cashier);
+                        }}
+                        title="Edit"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Edit2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -331,6 +308,16 @@ const CashierManagement = () => {
             ))}
           </div>
         )}
+
+        {/* Cashier Details Modal */}
+        <CashierDetailsModal
+          cashier={selectedCashier}
+          isOpen={showDetailsModal}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedCashier(null);
+          }}
+        />
 
         {/* Add Cashier Dialog */}
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -459,27 +446,6 @@ const CashierManagement = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Cashier</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to deactivate {selectedCashier?.full_name}? This action
-                will prevent them from logging in.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteCashier}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </CashierLayout>
   );

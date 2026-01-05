@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import AddPlayerDialog from "../../components/players/AddPlayerDialog";
+import PlayerDetailsDrawer from "../../components/players/PlayerDetailsDrawer";
 
 const Players = () => {
   const { token } = useAuth();
@@ -50,7 +51,7 @@ const Players = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [showPlayerDialog, setShowPlayerDialog] = useState(false);
+  const [showPlayerDrawer, setShowPlayerDrawer] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [playerTransactions, setPlayerTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
@@ -228,11 +229,11 @@ const Players = () => {
 
   const handleViewPlayer = async (player) => {
     setSelectedPlayer(player);
-    setShowPlayerDialog(true);
-    await Promise.all([
-      fetchPlayerTransactions(player.player_id),
-      fetchPlayerBalance(player.player_id)
-    ]);
+    setShowPlayerDrawer(true);
+  };
+
+  const handlePlayerUpdated = () => {
+    fetchPlayers();
   };
 
   // Start editing credit or limit
@@ -681,135 +682,13 @@ const Players = () => {
           )}
         </div>
 
-        {/* Player Transactions Modal */}
-        <Dialog open={showPlayerDialog} onOpenChange={setShowPlayerDialog}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-gray-900">
-                {selectedPlayer?.player_name} - Transaction History
-              </DialogTitle>
-            </DialogHeader>
-
-            {/* Net Balance and Stored Balance Display */}
-            {selectedPlayer && (
-              <div className="space-y-4 mt-4 mb-6">
-                {/* Net Balance - Excluding Stored Balance */}
-                <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600 mb-1">Net Balance</p>
-                        <p className="text-3xl font-bold text-blue-700">
-                          ₹{formatCurrency(playerBalance?.current_chip_balance || 0)}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">Playable / Active balance</p>
-                      </div>
-                      <Wallet className="w-12 h-12 text-blue-600 opacity-50" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Stored Balance - With Date & Time */}
-                {playerBalance && parseFloat(playerBalance.stored_chips || 0) > 0 && (
-                  <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-600 mb-1">STORED BALANCE</p>
-                          <p className="text-3xl font-bold text-green-700">
-                            ₹{formatCurrency(playerBalance.stored_chips || 0)}
-                          </p>
-                          {selectedPlayer.updated_at && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              Last updated: {new Date(selectedPlayer.updated_at).toLocaleDateString('en-IN', { 
-                                day: '2-digit', 
-                                month: 'short', 
-                                year: 'numeric' 
-                              })}, {new Date(selectedPlayer.updated_at).toLocaleTimeString('en-IN', { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                hour12: true 
-                              })}
-                            </p>
-                          )}
-                        </div>
-                        <PiggyBank className="w-12 h-12 text-green-600 opacity-50" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
-
-            {loadingTransactions || loadingBalance ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              </div>
-            ) : playerTransactions.length === 0 ? (
-              <div className="text-center py-12">
-                <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No transactions found</p>
-              </div>
-            ) : (
-              <div className="space-y-3 mt-4">
-                {playerTransactions.map((transaction) => (
-                  <div
-                    key={transaction.transaction_id}
-                    className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:bg-gray-50"
-                  >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                        {getTransactionIcon(transaction.transaction_type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 capitalize">
-                          {transaction.transaction_type?.replace(/_/g, " ")}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {formatDateTime(transaction.created_at)}
-                        </p>
-                        {transaction.notes && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            {transaction.notes}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      {(() => {
-                        const isProfit = ["buy_in", "settle_credit", "deposit_cash", "redeem_stored"].includes(
-                          transaction.transaction_type
-                        );
-                        const isLoss = ["cash_payout", "return_chips", "deposit_chips", "expense"].includes(
-                          transaction.transaction_type
-                        );
-                        // Use chips_amount if amount is 0 (for deposit_chips, redeem_stored, etc.)
-                        const displayAmount = (transaction.amount || 0) > 0 
-                          ? transaction.amount 
-                          : (transaction.chips_amount || 0);
-                        const colorClass = isProfit ? "text-green-600" : isLoss ? "text-red-600" : "text-gray-600";
-                        
-                        return (
-                          <>
-                            <p className={`text-lg font-semibold ${colorClass}`}>
-                              {isProfit ? "+" : isLoss ? "-" : ""}
-                              {formatCurrency(displayAmount)}
-                            </p>
-                            {transaction.chips_amount > 0 && transaction.amount > 0 && (
-                              <p className="text-sm text-gray-600">
-                                Chips: {parseFloat(transaction.chips_amount).toLocaleString("en-IN")}
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Player Details Drawer */}
+        <PlayerDetailsDrawer
+          player={selectedPlayer}
+          open={showPlayerDrawer}
+          onOpenChange={setShowPlayerDrawer}
+          onPlayerUpdated={handlePlayerUpdated}
+        />
 
         {/* Add Player Dialog */}
         <AddPlayerDialog

@@ -16,11 +16,12 @@ const handleSessionExpired = () => {
   if (sessionExpiredHandled) return;
   sessionExpiredHandled = true;
 
-  // Clear auth data
+  // Clear all auth data from localStorage
   localStorage.removeItem('auth_token');
   localStorage.removeItem('user_data');
+  sessionStorage.clear();
 
-  // Toast
+  // Show notification
   const toast = document.createElement('div');
   toast.innerHTML = `
     <div style="
@@ -36,15 +37,34 @@ const handleSessionExpired = () => {
       display: flex;
       gap: 12px;
       font-family: system-ui;
+      animation: slideIn 0.3s ease-out;
     ">
       <strong>Session Expired</strong>
       <span>Redirecting to login…</span>
     </div>
+    <style>
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    </style>
   `;
   document.body.appendChild(toast);
 
+  // Immediately redirect to login (no delay)
+  window.location.href = '/login';
+  
+  // Remove toast after 2 seconds
   setTimeout(() => {
-    window.location.href = '/login';
+    if (toast && toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
   }, 2000);
 };
 
@@ -103,18 +123,10 @@ class ApiService {
           throw new Error(errorMessage);
         }
 
-        // 🔒 ONLY real auth failures trigger logout
-        const isAuthExpired =
-          response.status === 401 &&
-          (
-            errorMessage.toLowerCase().includes('jwt') ||
-            errorMessage.toLowerCase().includes('unauthorized') ||
-            errorMessage.toLowerCase().includes('session expired')
-          );
-
-        if (isAuthExpired) {
+        // 🔒 AUTO LOGOUT on any 401 (Unauthorized) - Token expired or invalid
+        if (response.status === 401) {
           handleSessionExpired();
-          throw new Error('Session expired');
+          throw new Error('Session expired. Please login again.');
         }
 
         throw new Error(errorMessage);
@@ -141,6 +153,22 @@ class ApiService {
 
   delete(endpoint, token = null) {
     return this.request(endpoint, { method: 'DELETE', token });
+  }
+
+  // ================= ERROR HANDLER =================
+  handleError(error) {
+    // Extract error message from various error formats
+    // The error from request() is already an Error object with message
+    const errorMessage = error.response?.data?.message || 
+                        error.data?.message ||
+                        error.message || 
+                        'An unexpected error occurred';
+    const statusCode = error.response?.status || error.statusCode || 500;
+    
+    // Create a new error with the message and status code
+    const err = new Error(errorMessage);
+    err.statusCode = statusCode;
+    throw err;
   }
 }
 

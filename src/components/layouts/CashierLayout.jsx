@@ -470,10 +470,22 @@ const CashierLayout = ({ children }) => {
             </div>
 
           <div className="flex items-center gap-4">
-            {/* Date */}
+            {/* Date and Shift Start Time */}
             <div className="flex items-center gap-2 text-gray-600 bg-gray-100 p-2 rounded-lg">
               <Calendar className="w-4 h-4" />
               <span className="text-sm font-medium">{formatDate()}</span>
+              {activeShift && activeShift.started_at && (
+                <>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-xs text-gray-500">
+                    Started: {new Date(activeShift.started_at).toLocaleTimeString('en-IN', { 
+                      hour: '2-digit', 
+                      minute: '2-digit', 
+                      hour12: true 
+                    })}
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Shift Status Dropdown */}

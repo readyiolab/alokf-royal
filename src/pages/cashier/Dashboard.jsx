@@ -20,6 +20,7 @@ const CashierDashboard = () => {
 
   const availableFloat = dashboard?.wallets?.primary?.current || 0;
   const secondaryWallet = dashboard?.wallets?.secondary?.current || 0;
+  const cashInHand = dashboard?.wallets?.cash_balance || 0; // ✅ Use cash_balance instead of secondary_wallet
   const totalPayouts = dashboard?.totals?.withdrawals || 0;
   const totalExpenses = dashboard?.totals?.expenses || 0;
   const outstandingCredit = dashboard?.outstanding_credit || 0;
@@ -101,7 +102,7 @@ const CashierDashboard = () => {
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="space-y-1">
-                <div className="flex justify-between text-sm"><span className="text-gray-600">Cash in Hand</span><span className="font-semibold text-black">{formatCurrency(secondaryWallet)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Cash in Hand</span><span className="font-semibold text-black">{formatCurrency(cashInHand)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">Online Money</span><span className="font-semibold text-black">{formatCurrency(onlineMoney)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">SBI</span><span className="font-semibold text-black">{formatCurrency(sbiMoney)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">HDFC</span><span className="font-semibold text-black">{formatCurrency(hdfcMoney)}</span></div>

@@ -436,8 +436,12 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
                   phone_number: e.target.value.replace(/\D/g, "")
                 }))
               }
-              className="h-11"
+              readOnly={selectedPlayerId !== null && selectedPlayerId !== undefined}
+              className={`h-11 ${selectedPlayerId !== null && selectedPlayerId !== undefined ? 'bg-gray-50 cursor-not-allowed' : ''}`}
             />
+            {selectedPlayerId !== null && selectedPlayerId !== undefined && (
+              <p className="text-xs text-gray-500">Phone number is auto-filled from selected player</p>
+            )}
           </div>
         </div>
       </div>

@@ -175,6 +175,33 @@ class CashierShiftService {
       throw error;
     }
   }
+
+  /**
+   * Get all transactions for a specific cashier
+   * GET /api/cashier/cashier/:cashier_id/transactions
+   */
+  async getCashierTransactions(cashierId, sessionId = null) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token. Please login first.');
+      }
+
+      let url = `/cashier/cashier/${cashierId}/transactions`;
+      if (sessionId) {
+        url += `?session_id=${sessionId}`;
+      }
+
+      const response = await apiService.get(url, token);
+      return {
+        success: true,
+        data: response.data || response
+      };
+    } catch (error) {
+      console.error('Get cashier transactions error:', error);
+      throw error;
+    }
+  }
 }
 
 export default new CashierShiftService();

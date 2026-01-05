@@ -15,13 +15,54 @@ export const AuthProvider = ({ children }) => {
       try {
         const storedData = authService.getStoredAuthData();
         if (storedData && storedData.token && storedData.user) {
-          setToken(storedData.token);
-          setUser(storedData.user);
-          setIsAuthenticated(true);
+          // ✅ Validate token expiration before setting auth state
+          try {
+            // Decode JWT token to check expiration
+            const tokenParts = storedData.token.split('.');
+            if (tokenParts.length === 3) {
+              const tokenPayload = JSON.parse(atob(tokenParts[1]));
+              const currentTime = Date.now() / 1000; // Current time in seconds
+              
+              // Check if token is expired
+              if (tokenPayload.exp && tokenPayload.exp < currentTime) {
+                console.log('Token expired, clearing auth data');
+                authService.clearAuthData();
+                setToken(null);
+                setUser(null);
+                setIsAuthenticated(false);
+                // Redirect to login if not already there
+                if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+                  window.location.href = '/login';
+                }
+                return;
+              }
+            }
+            
+            // Token is valid, set auth state
+            setToken(storedData.token);
+            setUser(storedData.user);
+            setIsAuthenticated(true);
+          } catch (tokenError) {
+            // Invalid token format or expired, clear auth
+            console.error('Invalid or expired token:', tokenError);
+            authService.clearAuthData();
+            setToken(null);
+            setUser(null);
+            setIsAuthenticated(false);
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+              window.location.href = '/login';
+            }
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
         authService.clearAuthData();
+        setToken(null);
+        setUser(null);
+        setIsAuthenticated(false);
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.location.href = '/login';
+        }
       } finally {
         setLoading(false);
       }
