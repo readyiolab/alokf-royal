@@ -19,14 +19,19 @@ const CashierDashboard = () => {
   };
 
   const availableFloat = dashboard?.wallets?.primary?.current || 0;
-  const secondaryWallet = dashboard?.wallets?.secondary?.current || 0;
-  const cashInHand = dashboard?.wallets?.cash_balance || 0; // ✅ Use cash_balance instead of secondary_wallet
+  // ✅ TODAY'S MONEY: Use separate cash_balance and online_balance for display
+  // Cash in Hand = only today's cash buy-ins (from cash_balance)
+  // Online Money = only today's online buy-ins (from online_balance)
+  // Total Money = Cash in Hand + Online Money
+  const cashInHand = dashboard?.wallets?.todays_money?.cash_in_hand || 0; // Cash buy-ins only
+  const onlineMoney = dashboard?.wallets?.todays_money?.online_money || 0; // Online buy-ins only
+  const totalMoney = dashboard?.wallets?.todays_money?.total_money || 0; // Cash + Online
+  const secondaryWallet = dashboard?.wallets?.secondary?.current || 0; // Combined (for backward compatibility)
   const totalPayouts = dashboard?.totals?.withdrawals || 0;
   const totalExpenses = dashboard?.totals?.expenses || 0;
   const outstandingCredit = dashboard?.outstanding_credit || 0;
   const openingChips = dashboard?.chip_inventory?.opening || {};
   const currentChips = dashboard?.chip_inventory?.current_in_hand || {};
-  const onlineMoney = dashboard?.totals?.online_deposits || 0;
   const sbiMoney = dashboard?.totals?.sbi_deposits || 0;
   const hdfcMoney = dashboard?.totals?.hdfc_deposits || 0;
   const dealerTips = dashboard?.totals?.dealer_tips || 0;

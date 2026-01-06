@@ -129,6 +129,7 @@ const CashierTransactions = () => {
 
   // UI State
   const [activeForm, setActiveForm] = useState(null);
+  const [formKey, setFormKey] = useState(0); // Key to force form reset on reopen
   const [showStartSessionModal, setShowStartSessionModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [showViewFloatModal, setShowViewFloatModal] = useState(false);
@@ -294,6 +295,13 @@ const CashierTransactions = () => {
     setActiveForm(null);
     refreshSession();
   };
+
+  // Reset form key when form is opened (forces form to remount and reset state)
+  useEffect(() => {
+    if (activeForm) {
+      setFormKey(prev => prev + 1);
+    }
+  }, [activeForm]);
 
   const handleSessionStarted = async () => {
     console.log('=== handleSessionStarted CALLED (Transactions) ===');
@@ -476,11 +484,11 @@ const CashierTransactions = () => {
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Cash in Hand</span>
-                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.cash_balance || 0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.todays_money?.cash_in_hand || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Online Money</span>
-                    <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.online_deposits || 0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.todays_money?.online_money || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">SBI</span>
@@ -592,7 +600,11 @@ const CashierTransactions = () => {
 
           <div className={`${activeForm === 'buy-in' ? 'p-6' : activeForm === 'issue-credit' ? 'p-6' : 'p-6'} overflow-y-auto max-h-[calc(90vh-100px)]`}>
             {ActiveFormComponent && (
-              <ActiveFormComponent onSuccess={handleTransactionComplete} onCancel={() => setActiveForm(null)} />
+              <ActiveFormComponent 
+                key={`${activeForm}-${formKey}`} 
+                onSuccess={handleTransactionComplete} 
+                onCancel={() => setActiveForm(null)} 
+              />
             )}
           </div>
         </DialogContent>

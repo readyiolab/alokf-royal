@@ -655,9 +655,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                     <div className="flex justify-between text-sm pt-2 border-t-2 border-emerald-300">
                       <span className="font-bold text-emerald-900">Total Cash to Pay</span>
                       <span className="font-mono font-bold text-emerald-700 text-xl">
-                        ₹{adjustOutstandingCredit && outstandingCredit > 0 
-                          ? Math.max(0, totalPayoutAmount - Math.min(outstandingCredit, totalValue + (includeStoredBalance ? storedBalance : 0))).toLocaleString("en-IN")
-                          : totalPayoutAmount.toLocaleString("en-IN")}
+                        ₹{totalPayoutAmount.toLocaleString("en-IN")}
                       </span>
                     </div>
                   </CardContent>
