@@ -41,6 +41,7 @@ import CreditRegister from "./pages/cashier/CreditRegister";
 import FloatChipsLog from "./pages/cashier/FloatChipsLog";
 import CashierManagement from "./pages/cashier/CashierManagement";
 import AuditLogReversals from "./pages/cashier/AuditLogReversals";
+import Expenses from "./pages/cashier/Expenses";
 
 // Player pages
 // import PlayerDashboard from "./pages/player/Dashboard";
@@ -115,6 +116,7 @@ const App = () => (
                       <Route path="kyc" element={<KYCManagement />} />
                       <Route path="settlement" element={<CashierSettlement />} />
                       <Route path="reports" element={<CashierReports />} />
+                      <Route path="expenses" element={<Expenses />} />
                       <Route path="" element={<Navigate to="/cashier/dashboard" replace />} />
                       <Route path="*" element={<Navigate to="/cashier/dashboard" replace />} />
                     </Routes>

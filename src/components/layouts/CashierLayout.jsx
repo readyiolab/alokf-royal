@@ -366,6 +366,7 @@ const CashierLayout = ({ children }) => {
     { name: 'Chip Ledger', href: '/cashier/chip-ledger', icon: Coins },
     { name: 'Credit Register', href: '/cashier/credit-register', icon: CreditCard },
     { name: 'Float & Chips Log', href: '/cashier/float-chips-log', icon: Wallet },
+    { name: 'Expenses', href: '/cashier/expenses', icon: FileText },
     { name: 'Players', href: '/cashier/players', icon: Users },
     { name: 'Promotion Management', href: '/cashier/promotions', icon: Gift },
     { name: 'Cashier Management', href: '/cashier/cashier-management', icon: Settings2 },

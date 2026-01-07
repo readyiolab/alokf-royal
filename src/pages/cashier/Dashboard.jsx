@@ -19,14 +19,22 @@ const CashierDashboard = () => {
   };
 
   const availableFloat = dashboard?.wallets?.primary?.current || 0;
-  // ✅ TODAY'S MONEY: Use separate cash_balance and online_balance for display
-  // Cash in Hand = only today's cash buy-ins (from cash_balance)
-  // Online Money = only today's online buy-ins (from online_balance)
-  // Total Money = Cash in Hand + Online Money
-  const cashInHand = dashboard?.wallets?.todays_money?.cash_in_hand || 0; // Cash buy-ins only
-  const onlineMoney = dashboard?.wallets?.todays_money?.online_money || 0; // Online buy-ins only
-  const totalMoney = dashboard?.wallets?.todays_money?.total_money || 0; // Cash + Online
-  const secondaryWallet = dashboard?.wallets?.secondary?.current || 0; // Combined (for backward compatibility)
+  // ✅ FIXED: Use separate cash_balance and online_balance (not combined secondaryWallet)
+  const cashInHand = dashboard?.wallets?.secondary?.cash_balance ?? 0; // Only cash buy-ins
+  const onlineMoney = dashboard?.wallets?.secondary?.online_balance ?? 0; // Only online buy-ins
+  
+  // Debug: Log values to verify
+  useEffect(() => {
+    if (dashboard?.wallets?.secondary) {
+      console.log('💰 Dashboard Wallet Data:', {
+        cash_balance: dashboard.wallets.secondary.cash_balance,
+        online_balance: dashboard.wallets.secondary.online_balance,
+        current: dashboard.wallets.secondary.current,
+        cashInHand,
+        onlineMoney
+      });
+    }
+  }, [dashboard, cashInHand, onlineMoney]);
   const totalPayouts = dashboard?.totals?.withdrawals || 0;
   const totalExpenses = dashboard?.totals?.expenses || 0;
   const outstandingCredit = dashboard?.outstanding_credit || 0;
@@ -42,7 +50,13 @@ const CashierDashboard = () => {
     setShowAddFloatModal(false);
     setShowViewFloatModal(false);
     setShowCloseDayModal(false);
-    setTimeout(async () => { await refreshDashboard(); }, 1500);
+    // ✅ Immediately refresh to get fresh data for new session
+    // Wait a bit for backend to process, then refresh
+    setTimeout(async () => { 
+      await refreshDashboard(); 
+      // Force another refresh after a short delay to ensure fresh data
+      setTimeout(async () => { await refreshDashboard(); }, 500);
+    }, 1000);
   };
 
   if (loading) {

@@ -429,12 +429,38 @@ class TransactionService {
    */
   async addTransactionNote(token, transactionId, data) {
     try {
-      // For now, send as JSON (image upload will be handled separately later)
-      const payload = {
-        note: data.note || null,
-      };
-      
-      return await apiService.post(`/transactions/${transactionId}/notes`, payload, token);
+      // ✅ If image is provided, send as FormData; otherwise send as JSON
+      if (data.image && data.image instanceof File) {
+        const formData = new FormData();
+        formData.append('note', data.note || '');
+        formData.append('image', data.image);
+        
+        const API_BASE_URL = window.location.hostname === 'localhost'
+          ? 'http://localhost:5000/api'
+          : 'https://royalflush.red/api';
+        
+        const response = await fetch(`${API_BASE_URL}/transactions/${transactionId}/notes`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
+        
+        return await response.json();
+      } else {
+        // No image - send as JSON
+        const payload = {
+          note: data.note || null,
+        };
+        
+        return await apiService.post(`/transactions/${transactionId}/notes`, payload, token);
+      }
     } catch (error) {
       throw apiService.handleError(error);
     }

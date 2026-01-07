@@ -57,11 +57,33 @@ import ClubExpenseModal from '../../components/admin/ClubExpenseModal';
 // TRANSACTION FILTERS
 // ==========================================
 
-const getTransactionType = (t) => t?.transaction_type || '';
+const getTransactionType = (t) => {
+  if (!t) return '';
+  return t.transaction_type || '';
+};
 
 const getCashbookTransactions = (transactions = []) =>
   transactions.filter((t) => {
+    if (!t) return false;
+    
     const type = getTransactionType(t);
+    
+    // Debug: Log deposit_cash transactions
+    if (type === 'deposit_cash') {
+      console.log('🔍 Filtering deposit_cash transaction:', {
+        transaction_id: t.transaction_id,
+        type: t.transaction_type,
+        amount: t.amount,
+        primary_amount: t.primary_amount,
+        secondary_amount: t.secondary_amount
+      });
+    }
+
+    // ✅ deposit_cash should always appear in cashbook (cash deposit)
+    if (type === 'deposit_cash') {
+      console.log('✅ Including deposit_cash in cashbook');
+      return true; // Always include deposit_cash transactions
+    }
 
     if (['buy_in', 'cash_payout', 'settle_credit', 'add_float', 'expense'].includes(type)) {
       return true;
@@ -88,10 +110,32 @@ const getCashbookTransactions = (transactions = []) =>
 
 const getChipLedgerTransactions = (transactions = []) =>
   transactions.filter((t) => {
-    const type = t.transaction_type;
+    if (!t) return false;
+    
+    const type = t.transaction_type || getTransactionType(t);
     const activity = t.activity_type;
 
-    if (['buy_in', 'cash_payout', 'credit_issued', 'issue_credit', 'deposit_chips', 'return_chips'].includes(type)) {
+    // Debug: Log deposit_chips transactions
+    if (type === 'deposit_chips') {
+      console.log('🔍 Filtering deposit_chips transaction:', {
+        transaction_id: t.transaction_id,
+        type: t.transaction_type,
+        chips_amount: t.chips_amount,
+        chips_100: t.chips_100,
+        chips_500: t.chips_500,
+        chips_1000: t.chips_1000,
+        chips_5000: t.chips_5000,
+        chips_10000: t.chips_10000
+      });
+    }
+
+    // ✅ deposit_chips should always appear in chip ledger (chips are being deposited)
+    if (type === 'deposit_chips') {
+      console.log('✅ Including deposit_chips in chip ledger');
+      return true; // Always include deposit_chips transactions
+    }
+
+    if (['buy_in', 'cash_payout', 'credit_issued', 'issue_credit', 'return_chips', 'opening_chips', 'redeem_stored'].includes(type)) {
       return true;
     }
 
@@ -99,11 +143,14 @@ const getChipLedgerTransactions = (transactions = []) =>
     if (activity === 'player_expense' && parseFloat(t.chip_amount || 0) > 0) return true;
     if (activity === 'rakeback' && parseFloat(t.amount || t.chip_amount || 0) > 0) return true;
 
+    // Check for chip breakdown or chips_amount
     if (
       parseInt(t.chips_100 || 0) > 0 ||
       parseInt(t.chips_500 || 0) > 0 ||
+      parseInt(t.chips_1000 || 0) > 0 ||
       parseInt(t.chips_5000 || 0) > 0 ||
-      parseInt(t.chips_10000 || 0) > 0
+      parseInt(t.chips_10000 || 0) > 0 ||
+      parseFloat(t.chips_amount || 0) > 0
     ) {
       return true;
     }
@@ -129,7 +176,6 @@ const CashierTransactions = () => {
 
   // UI State
   const [activeForm, setActiveForm] = useState(null);
-  const [formKey, setFormKey] = useState(0); // Key to force form reset on reopen
   const [showStartSessionModal, setShowStartSessionModal] = useState(false);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [showViewFloatModal, setShowViewFloatModal] = useState(false);
@@ -296,13 +342,6 @@ const CashierTransactions = () => {
     refreshSession();
   };
 
-  // Reset form key when form is opened (forces form to remount and reset state)
-  useEffect(() => {
-    if (activeForm) {
-      setFormKey(prev => prev + 1);
-    }
-  }, [activeForm]);
-
   const handleSessionStarted = async () => {
     console.log('=== handleSessionStarted CALLED (Transactions) ===');
     setShowStartSessionModal(false);
@@ -361,10 +400,37 @@ const CashierTransactions = () => {
   // ==========================================
 
   const allTransactions = dashboard?.transactions?.all || [];
+  
+  // Debug: Log deposit transactions
+  const depositCashTransactions = allTransactions.filter(t => t.transaction_type === 'deposit_cash');
+  const depositChipsTransactions = allTransactions.filter(t => t.transaction_type === 'deposit_chips');
+  if (depositCashTransactions.length > 0) {
+    console.log('🔍 Found deposit_cash transactions:', depositCashTransactions);
+  }
+  if (depositChipsTransactions.length > 0) {
+    console.log('🔍 Found deposit_chips transactions:', depositChipsTransactions);
+  }
+  
   const cashbookTransactions = getCashbookTransactions(allTransactions);
   const chipLedgerTransactions = getChipLedgerTransactions(allTransactions);
   const creditRegisterTransactions = getCreditRegisterTransactions(allTransactions);
   const uniquePlayers = getUniquePlayersCount(allTransactions);
+  
+  // Debug: Log filtered results
+  const filteredDepositCash = cashbookTransactions.filter(t => t.transaction_type === 'deposit_cash');
+  const filteredDepositChips = chipLedgerTransactions.filter(t => t.transaction_type === 'deposit_chips');
+  if (depositCashTransactions.length > 0 && filteredDepositCash.length === 0) {
+    console.warn('⚠️ deposit_cash transactions filtered out!', {
+      original: depositCashTransactions.length,
+      filtered: filteredDepositCash.length
+    });
+  }
+  if (depositChipsTransactions.length > 0 && filteredDepositChips.length === 0) {
+    console.warn('⚠️ deposit_chips transactions filtered out!', {
+      original: depositChipsTransactions.length,
+      filtered: filteredDepositChips.length
+    });
+  }
 
   // ==========================================
   // LOADING STATE
@@ -484,11 +550,11 @@ const CashierTransactions = () => {
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Cash in Hand</span>
-                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.todays_money?.cash_in_hand || 0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.secondary?.cash_balance || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Online Money</span>
-                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.todays_money?.online_money || 0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.secondary?.online_balance || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">SBI</span>
@@ -577,7 +643,7 @@ const CashierTransactions = () => {
 
       {/* Transaction Form Modal */}
       <Dialog open={!!activeForm} onOpenChange={(open) => !open && setActiveForm(null)}>
-        <DialogContent className={`sm:max-w-2xl max-h-[90vh] ${activeForm === 'buy-in' ? 'p-0 overflow-hidden border-0 bg-white shadow-2xl rounded-2xl' : 'bg-card border-border'}`}>
+        <DialogContent className={`${activeForm === 'cash-payout' ? 'max-w-5xl w-full max-h-[95vh] overflow-y-auto' : activeForm === 'buy-in' ? 'sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden border-0 bg-white shadow-2xl rounded-2xl' : 'sm:max-w-2xl max-h-[90vh] bg-card border-border'}`}>
           {activeForm === 'issue-credit' ? (
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
@@ -598,13 +664,9 @@ const CashierTransactions = () => {
             </DialogHeader>
           ) : null}
 
-          <div className={`${activeForm === 'buy-in' ? 'p-6' : activeForm === 'issue-credit' ? 'p-6' : 'p-6'} overflow-y-auto max-h-[calc(90vh-100px)]`}>
+          <div className={`${activeForm === 'cash-payout' ? 'p-6' : activeForm === 'buy-in' ? 'p-6 overflow-y-auto max-h-[calc(90vh-0px)]' : activeForm === 'issue-credit' ? 'p-6 overflow-y-auto max-h-[calc(90vh-120px)]' : activeForm === 'deposit-chips' ? 'p-6 overflow-y-auto max-h-[calc(90vh-100px)]' : 'p-6 overflow-y-auto max-h-[calc(90vh-100px)]'}`}>
             {ActiveFormComponent && (
-              <ActiveFormComponent 
-                key={`${activeForm}-${formKey}`} 
-                onSuccess={handleTransactionComplete} 
-                onCancel={() => setActiveForm(null)} 
-              />
+              <ActiveFormComponent onSuccess={handleTransactionComplete} onCancel={() => setActiveForm(null)} />
             )}
           </div>
         </DialogContent>

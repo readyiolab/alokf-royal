@@ -43,6 +43,7 @@ const CreditRegister = () => {
   const [registerData, setRegisterData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [activeSettleFilter, setActiveSettleFilter] = useState('all'); // For settle online sub-filters
   
   // Export dialog state
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -195,14 +196,19 @@ const CreditRegister = () => {
 
     return transactions.filter((t) => {
       const type = t.transaction_type || '';
+      const paymentMode = t.payment_mode || '';
 
       switch (activeFilter) {
         case 'credit-issue':
           return type === 'credit_issued' || type === 'issue_credit';
         case 'chip-return':
           return type === 'return_chips' || type === 'redeem_stored';
-        case 'cash-settlement':
-          return type === 'settle_credit';
+        case 'settle-cash':
+          return type === 'settle_credit' && paymentMode === 'cash';
+        case 'settle-online':
+          if (type !== 'settle_credit' || !paymentMode?.startsWith('online_')) return false;
+          if (activeSettleFilter === 'all') return true;
+          return paymentMode === `online_${activeSettleFilter}`;
         default:
           return true;
       }
@@ -218,7 +224,8 @@ const CreditRegister = () => {
     { id: 'all', label: 'All', color: null, icon: Calendar },
     { id: 'credit-issue', label: 'Credit Issue', color: 'bg-orange-500', icon: CreditCard },
     { id: 'chip-return', label: 'Chip Return', color: 'bg-green-500', icon: Coins },
-    { id: 'cash-settlement', label: 'Cash Settlement', color: 'bg-orange-500', icon: Handshake },
+    { id: 'settle-cash', label: 'Settle Cash', color: 'bg-orange-500', icon: Handshake },
+    { id: 'settle-online', label: 'Settle Online', color: 'bg-orange-400', icon: Handshake },
   ];
 
   return (
@@ -289,24 +296,51 @@ const CreditRegister = () => {
 
         {/* Filter Tabs */}
         {registerData?.has_data && registerData.transactions?.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {filters.map((filter) => (
-              <Button
-                key={filter.id}
-                variant={activeFilter === filter.id ? 'default' : 'outline'}
-                onClick={() => setActiveFilter(filter.id)}
-                className={`flex items-center gap-2 ${
-                  activeFilter === filter.id 
-                    ? 'bg-gray-900 text-white hover:bg-gray-800' 
-                    : 'bg-white hover:bg-gray-50'
-                }`}
-              >
-                {filter.color && (
-                  <div className={`w-2 h-2 rounded-full ${filter.color}`} />
-                )}
-                {filter.label}
-              </Button>
-            ))}
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => (
+                <Button
+                  key={filter.id}
+                  variant={activeFilter === filter.id ? 'default' : 'outline'}
+                  onClick={() => {
+                    setActiveFilter(filter.id);
+                    setActiveSettleFilter('all'); // Reset settle sub-filter when changing main filter
+                  }}
+                  className={`flex items-center gap-2 ${
+                    activeFilter === filter.id 
+                      ? 'bg-gray-900 text-white hover:bg-gray-800' 
+                      : 'bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  {filter.color && (
+                    <div className={`w-2 h-2 rounded-full ${filter.color}`} />
+                  )}
+                  {filter.label}
+                </Button>
+              ))}
+            </div>
+
+            {/* Settle Online Sub-filters */}
+            {activeFilter === 'settle-online' && (
+              <div className="flex flex-wrap gap-2 pl-4 border-l-2 border-orange-300">
+                <span className="text-sm font-medium text-gray-700 mr-2 flex items-center">Bank:</span>
+                {['all', 'sbi', 'hdfc', 'icici', 'other'].map((type) => (
+                  <Button
+                    key={type}
+                    variant={activeSettleFilter === type ? 'default' : 'outline'}
+                    onClick={() => setActiveSettleFilter(type)}
+                    size="sm"
+                    className={`text-xs ${
+                      activeSettleFilter === type 
+                        ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                        : 'bg-white hover:bg-orange-50'
+                    }`}
+                  >
+                    {type === 'all' ? 'All' : type.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -51,6 +51,8 @@ const DailyCashbook = () => {
   const [cashbookData, setCashbookData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [activeBuyInFilter, setActiveBuyInFilter] = useState('all'); // For buy-in online sub-filters
+  const [activeSettleFilter, setActiveSettleFilter] = useState('all'); // For settle online sub-filters
   
   // Export dialog state
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -74,11 +76,19 @@ const DailyCashbook = () => {
     setLoading(true);
     try {
       const res = await cashbookService.getCashbookByDate(selectedDate);
+      console.log('📊 Cashbook API Response:', res);
       if (res.success) {
+        console.log('✅ Cashbook Data:', {
+          has_data: res.data?.has_data,
+          transaction_count: res.data?.transactions?.length,
+          transactions: res.data?.transactions
+        });
         setCashbookData(res.data);
+      } else {
+        console.error('❌ Cashbook API returned success: false', res);
       }
     } catch (err) {
-      console.error('Error fetching cashbook:', err);
+      console.error('❌ Error fetching cashbook:', err);
     } finally {
       setLoading(false);
     }
@@ -209,60 +219,85 @@ const DailyCashbook = () => {
   // Check if selected date is today (using IST timezone)
   const isToday = selectedDate === getTodayIST();
 
-  // Filter transactions based on active filter
+  // ✅ Filter transactions based on active filter
+  // When "all" is selected, show EVERYTHING - no filtering
   const filterTransactions = (transactions) => {
-    if (!transactions || transactions.length === 0) return [];
-    if (activeFilter === 'all') return transactions;
+    if (!transactions || transactions.length === 0) {
+      console.log('⚠️ No transactions to filter');
+      return [];
+    }
+    
+    // ✅ When "all" is selected, return ALL transactions without any filtering
+    if (activeFilter === 'all') {
+      console.log(`✅ Showing ALL ${transactions.length} transactions`);
+      return transactions;
+    }
 
-    return transactions.filter((t) => {
+    // Filter by specific type
+    const filtered = transactions.filter((t) => {
       const type = t.transaction_type || '';
       const activity = t.activity_type || '';
 
       switch (activeFilter) {
-        case 'buy-in':
-          return type === 'buy_in';
+        case 'buy-in-cash':
+          return type === 'buy_in' && t.payment_mode === 'cash';
+        case 'buy-in-online':
+          if (type !== 'buy_in' || !t.payment_mode?.startsWith('online_')) return false;
+          if (activeBuyInFilter === 'all') return true;
+          return t.payment_mode === `online_${activeBuyInFilter}`;
         case 'settle-cash':
-          return type === 'settle_credit';
+          return type === 'settle_credit' && t.payment_mode === 'cash';
+        case 'settle-online':
+          if (type !== 'settle_credit' || !t.payment_mode?.startsWith('online_')) return false;
+          if (activeSettleFilter === 'all') return true;
+          return t.payment_mode === `online_${activeSettleFilter}`;
         case 'cash-payout':
           return type === 'cash_payout';
         case 'deposit-chips':
           return type === 'deposit_chips' || type === 'return_chips';
+        case 'deposit-cash':
+          return type === 'deposit_cash';
+        case 'credit-issue':
+          return type === 'credit_issued' || type === 'issue_credit';
         case 'rakeback':
-          // Check if it's a rakeback activity or transaction
           return activity === 'rakeback' || type === 'rakeback' || 
                  (t.notes && t.notes.toLowerCase().includes('rakeback'));
         case 'dealer-tips':
-          // Check if it's a dealer tip activity
           return activity === 'dealer_tip' || 
                  (t.notes && t.notes.toLowerCase().includes('dealer tip'));
         case 'player-expense':
-          // Check if it's a player expense activity
           return activity === 'player_expense' || 
                  (type === 'expense' && t.player_id);
         case 'club-expense':
-          // Check if it's a club expense activity or expense without player
           return activity === 'club_expense' || 
                  (type === 'expense' && !t.player_id);
         default:
           return true;
       }
     });
+    
+    console.log(`🔍 Filter "${activeFilter}": ${filtered.length} of ${transactions.length} transactions`);
+    return filtered;
   };
 
   const filteredTransactions = cashbookData?.transactions 
     ? filterTransactions(cashbookData.transactions) 
     : [];
 
-  // Filter configuration with colors (matching the legend in the design)
+  // ✅ Filter configuration with colors - includes ALL transaction types
   const filters = [
     { id: 'all', label: 'All', color: null },
-    { id: 'buy-in', label: 'Buy-in', color: 'bg-green-500' },
+    { id: 'buy-in-cash', label: 'Buy-in Cash', color: 'bg-green-500' },
+    { id: 'buy-in-online', label: 'Buy-in Online', color: 'bg-blue-500' },
     { id: 'settle-cash', label: 'Settle Cash', color: 'bg-orange-500' },
+    { id: 'settle-online', label: 'Settle Online', color: 'bg-orange-400' },
     { id: 'cash-payout', label: 'Cash Payout', color: 'bg-red-500' },
-    { id: 'deposit-chips', label: 'Deposit Chips', color: 'bg-orange-500' },
+    { id: 'deposit-chips', label: 'Deposit Chips', color: 'bg-yellow-500' },
+    { id: 'deposit-cash', label: 'Deposit Cash', color: 'bg-emerald-500' },
+    { id: 'credit-issue', label: 'Issue Credit', color: 'bg-blue-500' },
     { id: 'rakeback', label: 'Rakeback', color: 'bg-purple-500' },
-    { id: 'dealer-tips', label: 'Dealer Tips', color: 'bg-blue-500' },
-    { id: 'player-expense', label: 'Player Expense', color: 'bg-orange-500' },
+    { id: 'dealer-tips', label: 'Dealer Tips', color: 'bg-indigo-500' },
+    { id: 'player-expense', label: 'Player Expense', color: 'bg-pink-500' },
     { id: 'club-expense', label: 'Club Expense', color: 'bg-gray-600' },
   ];
 
@@ -339,24 +374,74 @@ const DailyCashbook = () => {
 
       {/* Filter Tabs */}
       {cashbookData?.has_data && cashbookData.transactions?.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {filters.map((filter) => (
-            <Button
-              key={filter.id}
-              variant={activeFilter === filter.id ? 'default' : 'outline'}
-              onClick={() => setActiveFilter(filter.id)}
-              className={`flex items-center gap-2 ${
-                activeFilter === filter.id 
-                  ? 'bg-gray-900 text-white hover:bg-gray-800' 
-                  : 'bg-white hover:bg-gray-50'
-              }`}
-            >
-              {filter.color && (
-                <div className={`w-2 h-2 rounded-full ${filter.color}`} />
-              )}
-              {filter.label}
-            </Button>
-          ))}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {filters.map((filter) => (
+              <Button
+                key={filter.id}
+                variant={activeFilter === filter.id ? 'default' : 'outline'}
+                onClick={() => {
+                  setActiveFilter(filter.id);
+                  setActiveBuyInFilter('all'); // Reset buy-in sub-filter when changing main filter
+                  setActiveSettleFilter('all'); // Reset settle sub-filter when changing main filter
+                }}
+                className={`flex items-center gap-2 ${
+                  activeFilter === filter.id 
+                    ? 'bg-gray-900 text-white hover:bg-gray-800' 
+                    : 'bg-white hover:bg-gray-50'
+                }`}
+              >
+                {filter.color && (
+                  <div className={`w-2 h-2 rounded-full ${filter.color}`} />
+                )}
+                {filter.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Buy-in Online Sub-filters */}
+          {activeFilter === 'buy-in-online' && (
+            <div className="flex flex-wrap gap-2 pl-4 border-l-2 border-blue-300">
+              <span className="text-sm font-medium text-gray-700 mr-2 flex items-center">Online Type:</span>
+              {['all', 'sbi', 'hdfc', 'icici', 'other'].map((type) => (
+                <Button
+                  key={type}
+                  variant={activeBuyInFilter === type ? 'default' : 'outline'}
+                  onClick={() => setActiveBuyInFilter(type)}
+                  size="sm"
+                  className={`text-xs ${
+                    activeBuyInFilter === type 
+                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                      : 'bg-white hover:bg-blue-50'
+                  }`}
+                >
+                  {type === 'all' ? 'All' : type.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {/* Settle Online Sub-filters */}
+          {activeFilter === 'settle-online' && (
+            <div className="flex flex-wrap gap-2 pl-4 border-l-2 border-orange-300">
+              <span className="text-sm font-medium text-gray-700 mr-2 flex items-center">Bank:</span>
+              {['all', 'sbi', 'hdfc', 'icici', 'other'].map((type) => (
+                <Button
+                  key={type}
+                  variant={activeSettleFilter === type ? 'default' : 'outline'}
+                  onClick={() => setActiveSettleFilter(type)}
+                  size="sm"
+                  className={`text-xs ${
+                    activeSettleFilter === type 
+                      ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                      : 'bg-white hover:bg-orange-50'
+                  }`}
+                >
+                  {type === 'all' ? 'All' : type.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

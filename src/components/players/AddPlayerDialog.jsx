@@ -261,19 +261,48 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
 
     try {
       setLoading(true);
-      // Include credit_limit if provided
+      // Build player data object, only including fields that have values
       const playerData = {
         player_name: formData.player_name.trim(),
-        phone_number: formData.phone_number.trim() || null,
-        email: formData.email.trim() || null,
-        address: formData.address.trim() || null,
-        notes: formData.notes.trim() || null,
-        credit_limit: formData.credit_limit && formData.credit_limit.trim() ? parseFloat(formData.credit_limit) : 0,
         joining_date: formData.joining_date || new Date().toISOString().split('T')[0],
-        referral_code: formData.has_referral ? formData.referral_code : null,
-        referred_by_type: formData.has_referral ? formData.referral_type : null,
-        referred_by_player_id: formData.has_referral && formData.referral_type === 'player' ? formData.referred_by_player_id : null,
       };
+
+      // Only add optional fields if they have values
+      if (formData.phone_number && formData.phone_number.trim()) {
+        playerData.phone_number = formData.phone_number.trim();
+      }
+
+      if (formData.email && formData.email.trim()) {
+        playerData.email = formData.email.trim();
+      }
+
+      if (formData.address && formData.address.trim()) {
+        playerData.address = formData.address.trim();
+      }
+
+      if (formData.notes && formData.notes.trim()) {
+        playerData.notes = formData.notes.trim();
+      }
+
+      if (formData.credit_limit && formData.credit_limit.trim()) {
+        const creditLimit = parseFloat(formData.credit_limit);
+        if (!isNaN(creditLimit) && creditLimit >= 0) {
+          playerData.credit_limit = creditLimit;
+        }
+      }
+
+      // Only add referral fields if referral is enabled
+      if (formData.has_referral) {
+        if (formData.referral_code && formData.referral_code.trim()) {
+          playerData.referral_code = formData.referral_code.trim();
+        }
+        if (formData.referral_type) {
+          playerData.referred_by_type = formData.referral_type;
+        }
+        if (formData.referral_type === 'player' && formData.referred_by_player_id) {
+          playerData.referred_by_player_id = formData.referred_by_player_id;
+        }
+      }
       const newPlayer = await playerService.createPlayer(playerData);
       setSuccess('Player added successfully!');
 
@@ -380,9 +409,9 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
             )}
           </div>
 
-          {/* Email */}
+          {/* Email - Optional */}
           <div className="grid gap-2">
-            <Label htmlFor="email">Email Address</Label>
+            <Label htmlFor="email">Email Address <span className="text-gray-400 text-xs font-normal">(Optional)</span></Label>
             <div className="relative">
               <Input
                 id="email"
@@ -418,7 +447,7 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
           </div>
 
           {/* Joining Date */}
-          <div className="grid gap-2">
+          {/* <div className="grid gap-2">
             <Label htmlFor="joining_date">Joining Date</Label>
             <Input
               id="joining_date"
@@ -427,27 +456,15 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
               value={formData.joining_date}
               onChange={handleChange}
             />
-          </div>
+          </div> */}
 
-          {/* Player Code (Auto-generated) */}
-          <div className="grid gap-2">
-            <Label htmlFor="player_code">Player Code</Label>
-            <Input
-              id="player_code"
-              name="player_code"
-              value={playerCode}
-              readOnly
-              className="bg-gray-50"
-              placeholder="Auto-generated"
-            />
-            <p className="text-xs text-gray-500">Will be generated automatically (e.g., RF1234)</p>
-          </div>
+          
 
-          {/* Credit Limit */}
+          {/* Credit Limit - Optional */}
           <div className="grid gap-2">
             <Label htmlFor="credit_limit" className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              Credit Limit
+              Credit Limit <span className="text-gray-400 text-xs font-normal">(Optional)</span>
             </Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₹</span>
@@ -474,12 +491,12 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
             )}
           </div>
 
-          {/* Referral Toggle */}
+          {/* Referral Toggle - Optional */}
           <div className="grid gap-2 col-span-3">
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div className="flex-1">
                 <Label htmlFor="has_referral" className="text-base font-medium">
-                  Referred By
+                  Referred By <span className="text-gray-400 text-xs font-normal">(Optional)</span>
                 </Label>
                 <p className="text-xs text-gray-500 mt-1">
                   Enable if this player was referred by someone
@@ -619,9 +636,9 @@ export const AddPlayerDialog = ({ isOpen, onClose, onPlayerAdded }) => {
             </>
           )}
 
-          {/* Notes */}
+          {/* Notes - Optional */}
           <div className="grid gap-2 col-span-3">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">Notes <span className="text-gray-400 text-xs font-normal">(Optional)</span></Label>
             <Textarea
               id="notes"
               name="notes"

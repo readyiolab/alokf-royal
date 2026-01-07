@@ -318,9 +318,10 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
   };
 
   const getTransactionColor = (type) => {
-    if (['buy_in', 'settle_credit', 'deposit_cash', 'redeem_stored'].includes(type)) {
+    // ✅ deposit_chips should be green (positive) - chips are being stored/deposited
+    if (['buy_in', 'settle_credit', 'deposit_cash', 'redeem_stored', 'deposit_chips'].includes(type)) {
       return 'text-green-600';
-    } else if (['cash_payout', 'return_chips', 'deposit_chips', 'expense'].includes(type)) {
+    } else if (['cash_payout', 'return_chips', 'expense'].includes(type)) {
       return 'text-red-600';
     }
     return 'text-gray-600';
@@ -459,14 +460,20 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
                 <div className="grid grid-cols-2 gap-4">
                   <Card>
                     <CardContent className="p-4">
-                      <p className="text-xs text-gray-600 mb-1">Total Deposit</p>
+                      <p className="text-xs text-gray-600 mb-1">Total BuyIn</p>
                       <p className="text-lg font-bold text-gray-900">{formatCurrency(totalDeposit)}</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-4">
-                      <p className="text-xs text-gray-600 mb-1">Total Buy-in</p>
-                      <p className="text-lg font-bold text-gray-900">{formatCurrency(totalDeposit)}</p>
+                      <p className="text-xs text-gray-600 mb-1">Total Cashpayout</p>
+                      <p className="font-bold text-sm">
+                          {formatCurrency(
+                            filteredTransactions
+                              .filter(t => t.transaction_type === 'cash_payout')
+                              .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
+                          )}
+                        </p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -548,97 +555,94 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
                     {filteredTransactions.length === 0 ? (
                       <p className="text-center text-gray-500 py-8">No transactions found</p>
                     ) : (
-                      filteredTransactions.map((transaction) => {
-                        const isProfit = ['buy_in', 'settle_credit', 'deposit_cash', 'redeem_stored'].includes(
-                          transaction.transaction_type
-                        );
-                        const displayAmount = transaction.amount || transaction.chips_amount || 0;
-                        const colorClass = getTransactionColor(transaction.transaction_type);
+                      filteredTransactions
+                        .map((transaction) => {
+                          const isProfit = ['buy_in', 'settle_credit', 'deposit_cash', 'redeem_stored', 'deposit_chips'].includes(
+                            transaction.transaction_type
+                          );
+                          
+                          // For deposit_chips, always use chips_amount or calculate from chip breakdown
+                          let displayAmount = 0;
+                          if (transaction.transaction_type === 'deposit_chips') {
+                            // Try multiple field names (chips_amount, chip_amount) and parse as float
+                            const chipsAmount = parseFloat(
+                              transaction.chips_amount || 
+                              transaction.chip_amount || 
+                              transaction.chips_value ||
+                              0
+                            );
+                            
+                            if (chipsAmount > 0 && !isNaN(chipsAmount)) {
+                              displayAmount = chipsAmount;
+                            } else {
+                              // Calculate from chip breakdown if chips_amount is missing or 0
+                              const calculatedAmount = 
+                                (parseInt(transaction.chips_100 || 0) * 100) +
+                                (parseInt(transaction.chips_500 || 0) * 500) +
+                                (parseInt(transaction.chips_1000 || 0) * 1000) +
+                                (parseInt(transaction.chips_5000 || 0) * 5000) +
+                                (parseInt(transaction.chips_10000 || 0) * 10000);
+                              
+                              if (calculatedAmount > 0) {
+                                displayAmount = calculatedAmount;
+                              } else {
+                                // Last resort: try to extract from notes (e.g., "₹2000 chips")
+                                const notesMatch = transaction.notes?.match(/₹[\d,]+/);
+                                if (notesMatch) {
+                                  const extractedAmount = parseFloat(notesMatch[0].replace(/[₹,]/g, ''));
+                                  if (!isNaN(extractedAmount) && extractedAmount > 0) {
+                                    displayAmount = extractedAmount;
+                                  }
+                                }
+                              }
+                            }
+                          } else {
+                            // For other transactions, use amount
+                            displayAmount = parseFloat(transaction.amount || transaction.chips_amount || 0);
+                          }
+                          
+                          // Don't show transaction if it's deposit_chips/opening_chips with 0 value
+                          if ((transaction.transaction_type === 'deposit_chips' || transaction.transaction_type === 'opening_chips') && displayAmount === 0) {
+                            return null; // Don't render if no chip value
+                          }
+                          
+                          const colorClass = getTransactionColor(transaction.transaction_type);
 
-                        return (
-                          <Card key={transaction.transaction_id} className="p-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge
-                                    className={
-                                      transaction.transaction_type === 'buy_in'
-                                        ? 'bg-orange-100 text-orange-800'
-                                        : 'bg-blue-100 text-blue-800'
-                                    }
-                                  >
-                                    {transaction.transaction_type?.replace(/_/g, ' ').toUpperCase()}
-                                  </Badge>
-                                  <span className="text-xs text-gray-500">
-                                    {formatDateTime(transaction.created_at)}
-                                  </span>
+                          return (
+                            <Card key={transaction.transaction_id} className="p-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge
+                                      className={
+                                        transaction.transaction_type === 'buy_in'
+                                          ? 'bg-orange-100 text-orange-800'
+                                          : 'bg-blue-100 text-blue-800'
+                                      }
+                                    >
+                                      {transaction.transaction_type?.replace(/_/g, ' ').toUpperCase()}
+                                    </Badge>
+                                    <span className="text-xs text-gray-500">
+                                      {formatDateTime(transaction.created_at)}
+                                    </span>
+                                  </div>
+                                  {transaction.notes && (
+                                    <p className="text-xs text-gray-600 mt-1">{transaction.notes}</p>
+                                  )}
                                 </div>
-                                {transaction.notes && (
-                                  <p className="text-xs text-gray-600 mt-1">{transaction.notes}</p>
-                                )}
+                                <p className={`font-semibold ${colorClass}`}>
+                                  {isProfit ? '+' : '-'}
+                                  {formatCurrency(displayAmount)}
+                                </p>
                               </div>
-                              <p className={`font-semibold ${colorClass}`}>
-                                {isProfit ? '+' : '-'}
-                                {formatCurrency(displayAmount)}
-                              </p>
-                            </div>
-                          </Card>
-                        );
-                      })
+                            </Card>
+                          );
+                        })
+                        .filter(Boolean) // Remove null entries
                     )}
                   </div>
 
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-4 gap-2 mt-4">
-                    <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-gray-600">Deposits</p>
-                        <p className="font-bold text-sm">
-                          {formatCurrency(
-                            filteredTransactions
-                              .filter(t => t.transaction_type === 'buy_in')
-                              .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-                          )}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-gray-600">Withdrawals</p>
-                        <p className="font-bold text-sm">
-                          {formatCurrency(
-                            filteredTransactions
-                              .filter(t => t.transaction_type === 'cash_payout')
-                              .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-                          )}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-gray-600">Buy-ins</p>
-                        <p className="font-bold text-sm">
-                          {formatCurrency(
-                            filteredTransactions
-                              .filter(t => t.transaction_type === 'buy_in')
-                              .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-                          )}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="p-3 text-center">
-                        <p className="text-xs text-gray-600">Cash Outs</p>
-                        <p className="font-bold text-sm">
-                          {formatCurrency(
-                            filteredTransactions
-                              .filter(t => t.transaction_type === 'cash_payout')
-                              .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-                          )}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
+                 
                 </div>
 
                 <Separator />

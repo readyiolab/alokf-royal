@@ -421,6 +421,54 @@ class CashbookService {
       throw error;
     }
   }
+
+  // ==========================================
+  // EXPENSE REPORT
+  // ==========================================
+
+  /**
+   * Get expense report for today
+   * GET /api/cashier/expenses/today
+   */
+  async getExpenseReportToday() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token. Please login first.');
+      }
+
+      const response = await apiService.get('/cashier/expenses/today', token);
+      return {
+        success: true,
+        data: response.data || response
+      };
+    } catch (error) {
+      console.error('Get expense report today error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get expense report for specific date
+   * GET /api/cashier/expenses/date/:date
+   */
+  async getExpenseReportByDate(date) {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token. Please login first.');
+      }
+
+      const response = await apiService.get(`/cashier/expenses/date/${date}`, token);
+      return {
+        success: true,
+        data: response.data || response
+      };
+    } catch (error) {
+      console.error('Get expense report by date error:', error);
+      throw error;
+    }
+  }
 }
 
 export default new CashbookService();

@@ -175,7 +175,7 @@ const BuyInForm = ({ onSuccess, onCancel }) => {
     return () => clearTimeout(timeoutId);
   }, [formData.amount, selectedPlayerId, token, applyBonus]);
 
-  // When applyBonus changes, update active promotion and recalculate chips
+  // When applyBonus changes, update active promotion (but don't auto-calculate chips)
   useEffect(() => {
     if (applyBonus && availablePromotion) {
       setActivePromotion(availablePromotion);
@@ -186,32 +186,34 @@ const BuyInForm = ({ onSuccess, onCancel }) => {
       setBonusAmount(0);
     }
     
-    // Recalculate chip breakdown when bonus selection changes
-    const depositAmount = parseFloat(formData.amount) || 0;
-    if (depositAmount > 0) {
-      // If bonus is applied, calculate for total chips (deposit + bonus)
-      // Otherwise, calculate for deposit amount only
-      const totalForChips = applyBonus && availablePromotion 
-        ? depositAmount + (parseFloat(availablePromotion.bonus_amount) || 0)
-        : depositAmount;
-      const chipBreakdown = calculateChipBreakdownFromAmount(totalForChips);
-      setFormData(prev => ({ ...prev, ...chipBreakdown }));
-    }
+    // ✅ REMOVED: Auto-recalculate chip breakdown when bonus selection changes
+    // User will manually enter chip breakdown
+    // const depositAmount = parseFloat(formData.amount) || 0;
+    // if (depositAmount > 0) {
+    //   // If bonus is applied, calculate for total chips (deposit + bonus)
+    //   // Otherwise, calculate for deposit amount only
+    //   const totalForChips = applyBonus && availablePromotion 
+    //     ? depositAmount + (parseFloat(availablePromotion.bonus_amount) || 0)
+    //     : depositAmount;
+    //   const chipBreakdown = calculateChipBreakdownFromAmount(totalForChips);
+    //   setFormData(prev => ({ ...prev, ...chipBreakdown }));
+    // }
   }, [applyBonus, availablePromotion]);
 
-  // Calculate chip breakdown when amount changes
-  useEffect(() => {
-    const depositAmount = parseFloat(formData.amount) || 0;
-    if (depositAmount > 0) {
-      // If bonus is applied, calculate for total chips (deposit + bonus)
-      // Otherwise, calculate for deposit amount only
-      const totalForChips = applyBonus && activePromotion 
-        ? depositAmount + bonusAmount
-        : depositAmount;
-      const chipBreakdown = calculateChipBreakdownFromAmount(totalForChips);
-      setFormData(prev => ({ ...prev, ...chipBreakdown }));
-    }
-  }, [formData.amount, applyBonus, activePromotion, bonusAmount]);
+  // ✅ REMOVED: Auto-calculate chip breakdown when amount changes
+  // User will manually enter chip breakdown
+  // useEffect(() => {
+  //   const depositAmount = parseFloat(formData.amount) || 0;
+  //   if (depositAmount > 0) {
+  //     // If bonus is applied, calculate for total chips (deposit + bonus)
+  //     // Otherwise, calculate for deposit amount only
+  //     const totalForChips = applyBonus && activePromotion 
+  //       ? depositAmount + bonusAmount
+  //       : depositAmount;
+  //     const chipBreakdown = calculateChipBreakdownFromAmount(totalForChips);
+  //     setFormData(prev => ({ ...prev, ...chipBreakdown }));
+  //   }
+  // }, [formData.amount, applyBonus, activePromotion, bonusAmount]);
 
   // Check chip inventory availability when chip breakdown changes (including manual entry)
   useEffect(() => {

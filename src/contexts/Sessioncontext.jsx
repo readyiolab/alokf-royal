@@ -73,11 +73,23 @@ export const SessionProvider = ({ children }) => {
           };
         }
         
-        // ✅ Set dashboard data
+        // ✅ Set dashboard data - always set to ensure fresh data
         if (dashboardResponse?.success && dashboardResponse?.data) {
           console.log('✅ Dashboard data received');
-          setDashboard(dashboardResponse.data);
+          // ✅ Only set dashboard if there's an active session
+          // If no active session, dashboard should be null/empty
+          const hasActive = response?.has_active_session === true || 
+                           response?.has_active_session === 'true' || 
+                           response?.has_active_session === 1 || 
+                           response?.has_active_session === '1';
+          if (hasActive) {
+            setDashboard(dashboardResponse.data);
+          } else {
+            // ✅ Clear dashboard if no active session
+            setDashboard(null);
+          }
         } else {
+          // ✅ Always clear dashboard if no data or error
           setDashboard(null);
         }
       } else {
@@ -142,6 +154,10 @@ export const SessionProvider = ({ children }) => {
     console.log('🚀 Opening session with float:', floatAmount);
     setIsLoadingSession(true);
     
+    // ✅ Immediately clear dashboard data when opening new session to ensure fresh start
+    setDashboard(null);
+    setUpdateCounter(prev => prev + 1);
+    
     try {
       const response = await adminService.openSession(floatAmount);
       console.log('✅ Session open API response:', JSON.stringify(response, null, 2));
@@ -173,6 +189,10 @@ export const SessionProvider = ({ children }) => {
 
     console.log('🛑 Closing session...');
     setIsLoadingSession(true);
+    
+    // ✅ Immediately clear dashboard data when closing session
+    setDashboard(null);
+    setUpdateCounter(prev => prev + 1);
     
     try {
       const response = await adminService.closeSession();

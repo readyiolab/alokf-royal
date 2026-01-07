@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, CheckCircle, Search, User, ChevronsUpDown, Check, Wallet, CreditCard, Banknote, Building2 } from 'lucide-react';
+import { AlertCircle, Loader2, CheckCircle, Search, User, ChevronsUpDown, Check, Wallet, CreditCard, Banknote, Building2, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlayerSearch } from '../../hooks/usePlayerSearch';
 import transactionService from '../../services/transaction.service';
@@ -21,6 +21,8 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
     player_name: creditData?.player_name || '',
     settlement_amount: '',
     settlement_method: 'cash',
+    payment_type: 'cash', // 'cash' or 'online'
+    online_bank: '', // 'sbi', 'hdfc', 'icici', 'other'
     notes: ''
   });
 
@@ -31,6 +33,11 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
   const [selectedPlayer, setSelectedPlayer] = useState(creditData || null);
   const [outstandingCredit, setOutstandingCredit] = useState(0);
   const [loadingCredit, setLoadingCredit] = useState(false);
+  const [screenshot, setScreenshot] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  const [screenshotUrl, setScreenshotUrl] = useState(null);
+  const [screenshotPublicId, setScreenshotPublicId] = useState(null);
 
   const {
     searchQuery,
@@ -92,11 +99,107 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      
+      // When payment type changes, update settlement_method
+      if (name === 'payment_type') {
+        if (value === 'cash') {
+          newData.settlement_method = 'cash';
+          newData.online_bank = '';
+          handleRemoveScreenshot();
+        } else if (value === 'online') {
+          // Don't set settlement_method yet, wait for bank selection
+          newData.settlement_method = '';
+        }
+      }
+      
+      // When online bank is selected, update settlement_method
+      if (name === 'online_bank' && value) {
+        newData.settlement_method = `online_${value}`;
+      }
+      
+      // When payment mode changes to cash, clear screenshot
+      if (name === 'settlement_method' && value === 'cash') {
+        newData.payment_type = 'cash';
+        newData.online_bank = '';
+        handleRemoveScreenshot();
+      }
+      
+      return newData;
+    });
     setError(null);
+  };
+
+  const handleScreenshotSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB');
+      return;
+    }
+
+    setScreenshot(file);
+
+    // Preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setScreenshotPreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to backend
+    await uploadScreenshot(file);
+  };
+
+  const uploadScreenshot = async (file) => {
+    setUploadingScreenshot(true);
+    try {
+      const formData = new FormData();
+      formData.append('screenshot', file);
+
+      // Get API base URL
+      const API_BASE_URL = window.location.hostname === 'localhost'
+        ? 'http://localhost:5000/api'
+        : 'https://royalflush.red/api';
+
+      const response = await fetch(`${API_BASE_URL}/transactions/upload-screenshot`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'Failed to upload screenshot');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setScreenshotUrl(result.data.url);
+        setScreenshotPublicId(result.data.public_id);
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Screenshot upload error:', error);
+      setError(error.message || 'Failed to upload screenshot');
+      setScreenshot(null);
+      setScreenshotPreview(null);
+    } finally {
+      setUploadingScreenshot(false);
+    }
+  };
+
+  const handleRemoveScreenshot = () => {
+    setScreenshot(null);
+    setScreenshotPreview(null);
+    setScreenshotUrl(null);
+    setScreenshotPublicId(null);
   };
 
   const handleSelectPlayer = (player) => {
@@ -131,6 +234,19 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
       return;
     }
 
+    // Validate online bank selection
+    if (formData.payment_type === 'online' && !formData.online_bank) {
+      setError('Please select a bank for online payment');
+      return;
+    }
+
+    // Validate screenshot for online payments (MANDATORY)
+    const isOnlinePayment = formData.settlement_method && formData.settlement_method.startsWith('online_');
+    if (isOnlinePayment && !screenshotUrl) {
+      setError('Payment screenshot is required for online payments');
+      return;
+    }
+
     if (!token) {
       setError('Authentication required. Please login.');
       return;
@@ -144,7 +260,9 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
         player_id: formData.player_id,
         settle_amount: settlementAmount,
         payment_mode: formData.settlement_method,
-        notes: formData.notes || `Credit settlement for ${formData.player_name}`
+        notes: formData.notes || `Credit settlement for ${formData.player_name}`,
+        screenshot_url: screenshotUrl || null,
+        screenshot_public_id: screenshotPublicId || null
       });
 
       setSuccess(result.message || `✅ Credit settled successfully! Remaining balance: ₹${result.remaining_credit?.toFixed(2) || 0}`);
@@ -156,8 +274,12 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
       setFormData(prev => ({
         ...prev,
         settlement_amount: '',
+        payment_type: 'cash',
+        online_bank: '',
+        settlement_method: 'cash',
         notes: ''
       }));
+      handleRemoveScreenshot();
 
       if (onSuccess) {
         setTimeout(() => onSuccess({
@@ -301,23 +423,15 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
         <Card className={`border-2 ${outstandingCredit > 0 ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200' : 'bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200'}`}>
           <CardContent className="p-4">
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg">
-                  {selectedPlayer.player_name?.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <p className="font-bold text-gray-900 text-lg">{selectedPlayer.player_name}</p>
-                  <p className="text-sm text-gray-600">{selectedPlayer.player_code || `ID: ${selectedPlayer.player_id}`}</p>
-                </div>
-              </div>
-              <div className="text-right">
+              
+              <div className="text-left">
                 {loadingCredit ? (
                   <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                 ) : (
                   <>
                     <p className="text-xs text-gray-500 flex items-center gap-1 justify-end">
                       <CreditCard className="w-3 h-3" />
-                      Outstanding Credit
+                      Outstanding Credits
                     </p>
                     <p className={`text-3xl font-black ${outstandingCredit > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
                       {formatCurrency(outstandingCredit)}
@@ -404,46 +518,166 @@ export const SettleCreditForm = ({ creditData = null, onSuccess = null }) => {
           )}
 
           {/* Settlement Method Section */}
-          <div className="space-y-2">
+          <div className="space-y-4">
             <Label className="text-sm font-medium text-gray-900">Settlement Method</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: 'cash', label: 'Cash', icon: Banknote },
-                { value: 'online_sbi', label: 'SBI Online', icon: Building2 },
-                { value: 'online_hdfc', label: 'HDFC Online', icon: Building2 },
-                { value: 'online_icici', label: 'ICICI Online', icon: Building2 },
-                { value: 'online_other', label: 'Other Online', icon: CreditCard }
-              ].map((method) => {
-                const Icon = method.icon;
-                return (
-                  <label 
-                    key={method.value} 
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                      formData.settlement_method === method.value 
-                        ? 'border-emerald-500 bg-emerald-50 shadow-md' 
-                        : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="settlement_method"
-                      value={method.value}
-                      checked={formData.settlement_method === method.value}
-                      onChange={handleChange}
-                      className="sr-only"
-                    />
-                    <Icon className={`w-4 h-4 ${formData.settlement_method === method.value ? 'text-emerald-600' : 'text-gray-400'}`} />
-                    <span className={`text-sm font-medium ${formData.settlement_method === method.value ? 'text-emerald-700' : 'text-gray-600'}`}>
-                      {method.label}
-                    </span>
-                    {formData.settlement_method === method.value && (
-                      <Check className="w-4 h-4 text-emerald-600 ml-auto" />
-                    )}
-                  </label>
-                );
-              })}
+            
+            {/* First Level: Cash or Online */}
+            <div className="grid grid-cols-2 gap-3">
+              <label 
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.payment_type === 'cash' 
+                    ? 'border-emerald-500 bg-emerald-50 shadow-md' 
+                    : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment_type"
+                  value="cash"
+                  checked={formData.payment_type === 'cash'}
+                  onChange={handleChange}
+                  className="sr-only"
+                />
+                <Banknote className={`w-5 h-5 ${formData.payment_type === 'cash' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <span className={`text-base font-semibold ${formData.payment_type === 'cash' ? 'text-emerald-700' : 'text-gray-600'}`}>
+                  Cash
+                </span>
+                {formData.payment_type === 'cash' && (
+                  <Check className="w-5 h-5 text-emerald-600 ml-auto" />
+                )}
+              </label>
+
+              <label 
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.payment_type === 'online' 
+                    ? 'border-blue-500 bg-blue-50 shadow-md' 
+                    : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment_type"
+                  value="online"
+                  checked={formData.payment_type === 'online'}
+                  onChange={handleChange}
+                  className="sr-only"
+                />
+                <CreditCard className={`w-5 h-5 ${formData.payment_type === 'online' ? 'text-blue-600' : 'text-gray-400'}`} />
+                <span className={`text-base font-semibold ${formData.payment_type === 'online' ? 'text-blue-700' : 'text-gray-600'}`}>
+                  Online
+                </span>
+                {formData.payment_type === 'online' && (
+                  <Check className="w-5 h-5 text-blue-600 ml-auto" />
+                )}
+              </label>
             </div>
+
+            {/* Second Level: Bank Options (only show when Online is selected) */}
+            {formData.payment_type === 'online' && (
+              <div className="pl-4 border-l-2 border-blue-300 space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Select Bank</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'sbi', label: 'SBI', icon: Building2 },
+                    { value: 'hdfc', label: 'HDFC', icon: Building2 },
+                    { value: 'icici', label: 'ICICI', icon: Building2 },
+                    { value: 'other', label: 'Other', icon: CreditCard }
+                  ].map((bank) => {
+                    const Icon = bank.icon;
+                    return (
+                      <label 
+                        key={bank.value} 
+                        className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                          formData.online_bank === bank.value 
+                            ? 'border-blue-500 bg-blue-50 shadow-md' 
+                            : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="online_bank"
+                          value={bank.value}
+                          checked={formData.online_bank === bank.value}
+                          onChange={handleChange}
+                          className="sr-only"
+                        />
+                        <Icon className={`w-4 h-4 ${formData.online_bank === bank.value ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <span className={`text-sm font-medium ${formData.online_bank === bank.value ? 'text-blue-700' : 'text-gray-600'}`}>
+                          {bank.label}
+                        </span>
+                        {formData.online_bank === bank.value && (
+                          <Check className="w-4 h-4 text-blue-600 ml-auto" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Screenshot Upload - MANDATORY for Online Payment */}
+          {formData.settlement_method && formData.settlement_method.startsWith('online_') && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-900">
+                Payment Screenshot <span className="text-red-500">*</span>
+              </Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                <input
+                  type="file"
+                  id="screenshot-input-settle"
+                  accept="image/*"
+                  onChange={handleScreenshotSelect}
+                  disabled={uploadingScreenshot}
+                  className="hidden"
+                />
+                <label htmlFor="screenshot-input-settle" className="cursor-pointer flex flex-col items-center gap-2">
+                  {screenshotPreview ? (
+                    <div className="relative w-full">
+                      <img
+                        src={screenshotPreview}
+                        alt="Screenshot preview"
+                        className="max-h-48 w-full object-contain rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveScreenshot();
+                        }}
+                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                      {screenshot && <p className="text-xs text-gray-600 mt-2">{screenshot.name}</p>}
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700">
+                        Click to upload payment screenshot
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        PNG, JPG, JPEG up to 5MB
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+              {uploadingScreenshot && (
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading screenshot...
+                </div>
+              )}
+              {screenshotUrl && (
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <CheckCircle className="w-4 h-4" />
+                  Screenshot uploaded successfully
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Notes Section */}
           <div className="space-y-2">

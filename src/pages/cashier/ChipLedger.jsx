@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -49,6 +50,7 @@ const ChipLedger = () => {
   const [ledgerData, setLedgerData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [activeBuyInFilter, setActiveBuyInFilter] = useState('all'); // For buy-in online sub-filters
   
   // Export dialog state
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -72,11 +74,19 @@ const ChipLedger = () => {
     setLoading(true);
     try {
       const res = await cashbookService.getChipLedgerByDate(selectedDate);
+      console.log('📊 Chip Ledger API Response:', res);
       if (res.success) {
+        console.log('✅ Chip Ledger Data:', {
+          has_data: res.data?.has_data,
+          movement_count: res.data?.movements?.length,
+          movements: res.data?.movements
+        });
         setLedgerData(res.data);
+      } else {
+        console.error('❌ Chip Ledger API returned success: false', res);
       }
     } catch (err) {
-      console.error('Error fetching chip ledger:', err);
+      console.error('❌ Error fetching chip ledger:', err);
     } finally {
       setLoading(false);
     }
@@ -158,24 +168,38 @@ const ChipLedger = () => {
   // Check if selected date is today (using IST timezone)
   const isToday = selectedDate === getTodayIST();
 
-  // Filter transactions based on active filter
+  // ✅ Filter transactions based on active filter
+  // When "all" is selected, show EVERYTHING - no filtering
   const filterTransactions = (transactions) => {
-    if (!transactions || transactions.length === 0) return [];
-    if (activeFilter === 'all') return transactions;
+    if (!transactions || transactions.length === 0) {
+      console.log('⚠️ No transactions to filter');
+      return [];
+    }
+    
+    // ✅ When "all" is selected, return ALL transactions without any filtering
+    if (activeFilter === 'all') {
+      console.log(`✅ Showing ALL ${transactions.length} transactions`);
+      return transactions;
+    }
 
-    return transactions.filter((t) => {
+    // Filter by specific type
+    const filtered = transactions.filter((t) => {
       const type = t.transaction_type || '';
       const activity = t.activity_type || '';
 
       switch (activeFilter) {
-        case 'buy-in':
-          return type === 'buy_in';
+        case 'buy-in-cash':
+          return type === 'buy_in' && t.payment_mode === 'cash';
+        case 'buy-in-online':
+          if (type !== 'buy_in' || !t.payment_mode?.startsWith('online_')) return false;
+          if (activeBuyInFilter === 'all') return true;
+          return t.payment_mode === `online_${activeBuyInFilter}`;
         case 'credit-issue':
           return type === 'credit_issued' || type === 'issue_credit';
         case 'cash-payout':
           return type === 'cash_payout';
         case 'deposit-chips':
-          return type === 'deposit_chips' || type === 'return_chips';
+          return type === 'deposit_chips' || type === 'return_chips' || type === 'opening_chips' || type === 'redeem_stored';
         case 'rakeback':
           return activity === 'rakeback' || type === 'rakeback' || 
                  (t.notes && t.notes.toLowerCase().includes('rakeback'));
@@ -185,6 +209,9 @@ const ChipLedger = () => {
         case 'player-expense':
           return activity === 'player_expense' || 
                  (type === 'expense' && t.player_id);
+        case 'club-expense':
+          return activity === 'club_expense' || 
+                 (type === 'expense' && !t.player_id);
         case 'reversed':
           return t.is_reversed === 1 || t.is_reversed === true || 
                  type === 'reversal' || t.reversal_transaction_id;
@@ -192,22 +219,27 @@ const ChipLedger = () => {
           return true;
       }
     });
+    
+    console.log(`🔍 Filter "${activeFilter}": ${filtered.length} of ${transactions.length} transactions`);
+    return filtered;
   };
 
   const filteredTransactions = ledgerData?.movements 
     ? filterTransactions(ledgerData.movements) 
     : [];
 
-  // Filter configuration with colors and icons
+  // ✅ Filter configuration with colors and icons - includes ALL transaction types
   const filters = [
     { id: 'all', label: 'All', color: null, icon: Calendar },
-    { id: 'buy-in', label: 'Buy-in', color: 'bg-green-500', icon: Plus },
+    { id: 'buy-in-cash', label: 'Buy-in Cash', color: 'bg-green-500', icon: Plus },
+    { id: 'buy-in-online', label: 'Buy-in Online', color: 'bg-blue-500', icon: Plus },
     { id: 'credit-issue', label: 'Credit Issue', color: 'bg-orange-500', icon: CreditCard },
     { id: 'cash-payout', label: 'Cash Payout', color: 'bg-red-500', icon: Minus },
     { id: 'deposit-chips', label: 'Deposit Chips', color: 'bg-yellow-500', icon: Coins },
     { id: 'rakeback', label: 'Rakeback', color: 'bg-purple-500', icon: Gift },
     { id: 'dealer-tips', label: 'Dealer Tips', color: 'bg-blue-500', icon: Wallet },
-    { id: 'player-expense', label: 'Player Expense', color: 'bg-orange-600', icon: ShoppingCart },
+    { id: 'player-expense', label: 'Player Expense', color: 'bg-pink-500', icon: ShoppingCart },
+    { id: 'club-expense', label: 'Club Expense', color: 'bg-gray-600', icon: Building },
     { id: 'reversed', label: 'Reversed', color: 'bg-pink-500', icon: RotateCcw },
   ];
 
@@ -279,24 +311,51 @@ const ChipLedger = () => {
 
         {/* Filter Tabs */}
         {ledgerData?.has_data && ledgerData.movements?.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {filters.map((filter) => (
-              <Button
-                key={filter.id}
-                variant={activeFilter === filter.id ? 'default' : 'outline'}
-                onClick={() => setActiveFilter(filter.id)}
-                className={`flex items-center gap-2 ${
-                  activeFilter === filter.id 
-                    ? 'bg-gray-900 text-white hover:bg-gray-800' 
-                    : 'bg-white hover:bg-gray-50'
-                }`}
-              >
-                {filter.color && (
-                  <div className={`w-2 h-2 rounded-full ${filter.color}`} />
-                )}
-                {filter.label}
-              </Button>
-            ))}
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => (
+                <Button
+                  key={filter.id}
+                  variant={activeFilter === filter.id ? 'default' : 'outline'}
+                  onClick={() => {
+                    setActiveFilter(filter.id);
+                    setActiveBuyInFilter('all'); // Reset sub-filter when changing main filter
+                  }}
+                  className={`flex items-center gap-2 ${
+                    activeFilter === filter.id 
+                      ? 'bg-gray-900 text-white hover:bg-gray-800' 
+                      : 'bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  {filter.color && (
+                    <div className={`w-2 h-2 rounded-full ${filter.color}`} />
+                  )}
+                  {filter.label}
+                </Button>
+              ))}
+            </div>
+
+            {/* Buy-in Online Sub-filters */}
+            {activeFilter === 'buy-in-online' && (
+              <div className="flex flex-wrap gap-2 pl-4 border-l-2 border-blue-300">
+                <span className="text-sm font-medium text-gray-700 mr-2 flex items-center">Online Type:</span>
+                {['all', 'sbi', 'hdfc', 'icici', 'other'].map((type) => (
+                  <Button
+                    key={type}
+                    variant={activeBuyInFilter === type ? 'default' : 'outline'}
+                    onClick={() => setActiveBuyInFilter(type)}
+                    size="sm"
+                    className={`text-xs ${
+                      activeBuyInFilter === type 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                        : 'bg-white hover:bg-blue-50'
+                    }`}
+                  >
+                    {type === 'all' ? 'All' : type.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

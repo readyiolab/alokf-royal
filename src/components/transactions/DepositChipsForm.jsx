@@ -248,9 +248,9 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Header Section */}
-      <div className="space-y-2 pb-4 border-b border-gray-200">
+      <div className="space-y-2 pb-3 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
             <Save className="w-5 h-5 text-orange-600" />
@@ -290,7 +290,6 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
         </button>
       </div>
 
-     
       {/* Player Balance Information */}
       {(selectedPlayerId !== null && selectedPlayerId !== undefined) && loadingBalance && (
         <div className="flex items-center gap-2 text-muted-foreground py-3 px-4 bg-muted/50 rounded-lg">
@@ -299,125 +298,80 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
         </div>
       )}
       
-      {(selectedPlayerId !== null && selectedPlayerId !== undefined) && chipBalance && !loadingBalance && (
-        <div className="space-y-4">
-          {/* Player Name Header */}
-          <div className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
-            <p className="text-lg font-bold text-gray-900 mb-1">{formData.player_name}</p>
-            <p className="text-xs text-gray-600">Player Balance Information</p>
-          </div>
-
-          {/* Primary and Secondary Balance Cards */}
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-            {/* Primary Balance - Current Chips (Playable) */}
-            <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 shadow-md">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Coins className="w-5 h-5 text-emerald-600" />
-                    <span className="text-sm font-semibold text-gray-700">Primary Balance</span>
-                  </div>
-                  <Badge className="bg-emerald-600 text-white text-xs">Playable</Badge>
-                </div>
-                <p className="text-3xl font-black text-emerald-700 mb-1">
-                  ₹{parseFloat(chipBalance?.current_chip_balance || 0).toLocaleString("en-IN")}
-                </p>
-                <p className="text-xs text-gray-600">Current chips in hand</p>
-              </CardContent>
-            </Card>
-
-            {/* Secondary Balance - Stored Chips */}
-            <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Wallet className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-semibold text-gray-700">Secondary Balance</span>
-                  </div>
-                  <Badge className="bg-blue-600 text-white text-xs">Stored</Badge>
-                </div>
-                <p className="text-3xl font-black text-blue-700 mb-1">
-                  ₹{parseFloat(chipBalance?.stored_chips || 0).toLocaleString("en-IN")}
-                </p>
-                <p className="text-xs text-gray-600">Available for chip issuance</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
+      
 
       {/* Player Search */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium text-gray-900">Player</Label>
+      <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2 relative">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-            <Input
-              id="player_name"
-              placeholder="Search by name or player code"
-              value={searchQuery}
-              onFocus={handlePlayerFocus}
-              onChange={(e) => handlePlayerInput(e.target.value)}
-              onBlur={() => {
-                setTimeout(() => setShowDropdown(false), 200);
-              }}
-              className="h-11 pl-9"
-            />
-            {searchingPlayers && (
-              <Loader2 className="absolute right-3 top-3 w-4 h-4 text-gray-500 animate-spin" />
-            )}
-          </div>
-
-          {(showDropdown || searchError) && (
-            <div className="absolute z-20 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
-              {searchError && (
-                <div className="px-3 py-2 text-sm text-red-600 border-b border-gray-200">
-                  {searchError}
-                </div>
+            <Label className="text-sm font-medium text-gray-900">Player *</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
+              <Input
+                id="player_name"
+                placeholder="Search by name or player code"
+                value={searchQuery}
+                onFocus={handlePlayerFocus}
+                onChange={(e) => handlePlayerInput(e.target.value)}
+                onBlur={() => {
+                  setTimeout(() => setShowDropdown(false), 200);
+                }}
+                className="h-11 pl-9"
+              />
+              {searchingPlayers && (
+                <Loader2 className="absolute right-3 top-3.5 w-4 h-4 text-gray-500 animate-spin" />
               )}
+            </div>
 
-              {!searchingPlayers &&
-                !searchError &&
-                (!filteredPlayers || filteredPlayers.length === 0) && (
-                  <div className="px-3 py-2 text-sm text-gray-500">
-                    {loadedAll
-                      ? "No players available"
-                      : "Start typing to search players"}
+            {(showDropdown || searchError) && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
+                {searchError && (
+                  <div className="px-3 py-2 text-sm text-red-600 border-b border-gray-200">
+                    {searchError}
                   </div>
                 )}
 
-              {filteredPlayers &&
-                Array.isArray(filteredPlayers) &&
-                filteredPlayers.map((player) => (
-                  <button
-                    key={player.player_id}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelectPlayer(player);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {player.player_name}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          Code: {player.player_code || player.player_id}
-                        </p>
-                      </div>
-                      {player.stored_chips > 0 && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                          Stored: {formatCurrency(player.stored_chips)}
-                        </span>
-                      )}
+                {!searchingPlayers &&
+                  !searchError &&
+                  (!filteredPlayers || filteredPlayers.length === 0) && (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      {loadedAll
+                        ? "No players available"
+                        : "Start typing to search players"}
                     </div>
-                  </button>
-                ))}
-            </div>
-          )}
+                  )}
+
+                {filteredPlayers &&
+                  Array.isArray(filteredPlayers) &&
+                  filteredPlayers.map((player) => (
+                    <button
+                      key={player.player_id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectPlayer(player);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {player.player_name}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Code: {player.player_code || player.player_id}
+                          </p>
+                        </div>
+                        {player.stored_chips > 0 && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            Stored: {formatCurrency(player.stored_chips)}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -461,19 +415,19 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
 
       {/* ✅ DEPOSIT CASH SECTION */}
       {depositType === 'cash' && (
-        <Card className="border-green-200 shadow-lg">
-          <CardHeader className="bg-green-50">
+        <Card className="border-2 border-green-200 bg-white shadow-md">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <Banknote className="w-5 h-5 text-green-600" />
-              <span className="text-black">Cash Deposit</span>
+              <span className="text-gray-900">Cash Deposit</span>
             </CardTitle>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-sm text-gray-600 mt-1">
               Player deposits cash - goes to secondary wallet
             </p>
           </CardHeader>
-          <CardContent className="pt-6 space-y-4 bg-white">
+          <CardContent className="pt-4 space-y-4">
             <div className="space-y-2">
-              <Label className="text-gray-700 font-medium">
+              <Label className="text-sm font-medium text-gray-900">
                 Cash Amount (₹) *
               </Label>
               <Input
@@ -482,7 +436,7 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
                 step="100"
                 value={formData.cash_amount}
                 onChange={(e) => setFormData(prev => ({ ...prev, cash_amount: e.target.value }))}
-                className="h-14 text-center text-2xl font-bold"
+                className="h-12 text-center text-xl font-bold border-2 border-green-200 focus:border-green-500"
                 placeholder="Enter amount"
               />
             </div>
@@ -493,7 +447,7 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
                 <AlertDescription className="text-green-800">
                   <div className="flex justify-between items-center">
                     <span className="font-semibold">Amount to Deposit:</span>
-                    <span className="text-2xl font-bold text-green-600">
+                    <span className="text-xl font-bold text-green-600">
                       {formatCurrency(cashAmount)}
                     </span>
                   </div>
@@ -534,13 +488,13 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
       )}
 
       {/* Submit Buttons */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 pt-2">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
           disabled={loading}
-          className="flex-1"
+          className="flex-1 h-11 border-gray-300 text-gray-700 hover:bg-gray-50"
         >
           Cancel
         </Button>
@@ -551,7 +505,7 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
             !selectedPlayerId ||
             (depositType === 'chips' ? (totalValue === 0 || totalChipCount === 0) : cashAmount <= 0)
           }
-          className={`flex-1 disabled:bg-gray-400 disabled:cursor-not-allowed ${
+          className={`flex-1 h-11 disabled:bg-gray-400 disabled:cursor-not-allowed ${
             depositType === 'chips' 
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-green-600 hover:bg-green-700 text-white'

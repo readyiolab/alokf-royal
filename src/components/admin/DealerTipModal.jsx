@@ -277,25 +277,20 @@ const DealerTipModal = ({ isOpen, onClose, onSuccess, sessionId }) => {
             </CardContent>
           </Card>
 
-          {/* Cash Percentage Selection */}
+          {/* Cash Percentage Selection - Only 50% */}
           <div className="space-y-2">
             <Label className="text-sm font-medium text-gray-900">Cash Percentage to Dealer</Label>
-            <div className="grid grid-cols-5 gap-2">
-              {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(percentage => (
-                <button
-                  key={percentage}
-                  type="button"
-                  onClick={() => setCashPercentage(percentage)}
-                  className={`h-12 rounded-lg border-2 font-bold text-sm transition-all ${
-                    cashPercentage === percentage
-                      ? 'border-green-500 bg-green-500 text-white shadow-lg'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50'
-                  }`}
-                >
-                  {percentage}%
-                </button>
-              ))}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setCashPercentage(50)}
+                className="h-16 w-32 rounded-lg border-2 border-green-500 bg-green-500 text-white font-bold text-lg shadow-lg cursor-default"
+                disabled
+              >
+                50%
+              </button>
             </div>
+            <p className="text-xs text-gray-500 text-center">Fixed at 50%</p>
           </div>
 
           {/* Summary Section */}
