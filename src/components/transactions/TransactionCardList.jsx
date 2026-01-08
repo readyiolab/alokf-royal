@@ -88,7 +88,8 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
     
     // For cash flow: inflow means money coming IN to cashier
     // For chip ledger: dealer_tip and player_expense mean chips coming IN to cashier
-    let isInflow = ['buy_in', 'settle_credit', 'add_float', 'deposit_cash'].includes(type);
+    // deposit_chips also means chips coming IN to cashier (stored)
+    let isInflow = ['buy_in', 'settle_credit', 'add_float', 'deposit_cash', 'deposit_chips'].includes(type);
     
     // Special case: dealer tips and player expenses - chips come IN to cashier
     // (even though cash goes OUT, the chips come back)
@@ -164,7 +165,12 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
   const handleViewScreenshot = (transaction) => {
     if (transaction.screenshot_url) {
       setScreenshotUrl(transaction.screenshot_url);
-      setAttachmentTransaction(null);
+      // Store transaction for settle_credit and deposit_cash to show proper title
+      setAttachmentTransaction(
+        transaction.transaction_type === 'settle_credit' || transaction.transaction_type === 'deposit_cash' 
+          ? transaction 
+          : null
+      );
       setShowScreenshotModal(true);
     }
   };
@@ -304,6 +310,16 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                               </span>
                             </span>
                           )}
+                          {/* Show payment mode for settle_credit transactions */}
+                          {transaction.transaction_type === 'settle_credit' && transaction.payment_mode && (
+                            <span className="ml-2">
+                              • <span className="font-medium">
+                                {transaction.payment_mode === 'cash' ? 'Cash' : 
+                                 transaction.payment_mode.startsWith('online_') ? 'Online' : 
+                                 transaction.payment_mode.replace('online_', '').toUpperCase()}
+                              </span>
+                            </span>
+                          )}
                         </span>
                         {/* Small screenshot icon for online buy-ins */}
                         {transaction.transaction_type === 'buy_in' && 
@@ -324,7 +340,54 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                               <img
                                 src={transaction.screenshot_url}
                                 alt="Payment Screenshot"
-                                className="w-64 h-auto rounded border border-gray-200"
+                                className="w-64 h-auto rounded border border-gray-200 cursor-pointer"
+                                onClick={() => handleViewScreenshot(transaction)}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        {/* Small screenshot icon for settle_credit transactions (both cash and online can have screenshots) */}
+                        {transaction.transaction_type === 'settle_credit' && 
+                         transaction.screenshot_url && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:text-blue-700 transition-colors"
+                                title="View Payment Screenshot"
+                              >
+                                <ImageIcon className="w-4 h-4" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-2" align="start">
+                              <img
+                                src={transaction.screenshot_url}
+                                alt="Payment Screenshot"
+                                className="w-64 h-auto rounded border border-gray-200 cursor-pointer"
+                                onClick={() => handleViewScreenshot(transaction)}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        {/* Small screenshot icon for deposit_cash transactions */}
+                        {transaction.transaction_type === 'deposit_cash' && 
+                         transaction.screenshot_url && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:text-blue-700 transition-colors"
+                                title="View Payment Screenshot"
+                              >
+                                <ImageIcon className="w-4 h-4" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-2" align="start">
+                              <img
+                                src={transaction.screenshot_url}
+                                alt="Payment Screenshot"
+                                className="w-64 h-auto rounded border border-gray-200 cursor-pointer"
+                                onClick={() => handleViewScreenshot(transaction)}
                               />
                             </PopoverContent>
                           </Popover>
@@ -457,7 +520,21 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                     {/* Amount */}
                     <div className="text-right min-w-[100px]">
                       <p className={`text-lg font-bold ${amountColor}`}>
-                        {isInflow ? '+' : ''}{formatCurrency(transaction.amount || 0)}
+                        {(() => {
+                          // For deposit_chips, calculate chip value from breakdown instead of showing ₹0
+                          if (transaction.transaction_type === 'deposit_chips') {
+                            const chipValue = 
+                              (parseInt(transaction.chips_100 || 0) * 100) +
+                              (parseInt(transaction.chips_500 || 0) * 500) +
+                              (parseInt(transaction.chips_1000 || 0) * 1000) +
+                              (parseInt(transaction.chips_5000 || 0) * 5000) +
+                              (parseInt(transaction.chips_10000 || 0) * 10000);
+                            // Show chip value in green (inflow) if there are chips
+                            return chipValue > 0 ? `+${formatCurrency(chipValue)}` : formatCurrency(transaction.amount || 0);
+                          }
+                          // For other transactions, show amount as normal
+                          return `${isInflow ? '+' : ''}${formatCurrency(transaction.amount || 0)}`;
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -483,7 +560,13 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {attachmentTransaction ? 'Expense Attachment' : 'Payment Screenshot'}
+              {attachmentTransaction?.activity_type === 'club_expense'
+                ? 'Expense Attachment'
+                : attachmentTransaction?.transaction_type === 'settle_credit'
+                ? 'Credit Settlement Screenshot'
+                : attachmentTransaction?.transaction_type === 'deposit_cash'
+                ? 'Deposit Cash Screenshot'
+                : 'Payment Screenshot'}
             </DialogTitle>
           </DialogHeader>
           {screenshotUrl && (

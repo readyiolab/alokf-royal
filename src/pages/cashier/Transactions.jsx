@@ -474,9 +474,19 @@ const CashierTransactions = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="space-y-1">
+                  {/* Total Amount - Cash in Hand + Online Money (Total Deposits) */}
+                  <div className="flex justify-between items-center pb-2 mb-2 border-b-2 border-gray-300">
+                    <span className="text-sm font-bold text-gray-900">Total Amount</span>
+                    <span className="text-lg font-bold text-black">
+                      {formatCurrency(
+                        (dashboard?.wallets?.secondary?.cash_balance || 0) + 
+                        (dashboard?.totals?.online_deposits || 0)
+                      )}
+                    </span>
+                  </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Cash in Hand</span>
-                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.secondary?.current || 0)}</span>
+                    <span className="font-semibold text-black">{formatCurrency(dashboard?.wallets?.secondary?.cash_balance || 0)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Online Money</span>
