@@ -19,27 +19,13 @@ const CashierDashboard = () => {
   };
 
   const availableFloat = dashboard?.wallets?.primary?.current || 0;
-  // ✅ FIXED: Use separate cash_balance and online_balance (not combined secondaryWallet)
-  const cashInHand = dashboard?.wallets?.secondary?.cash_balance ?? 0; // Only cash buy-ins
-  const onlineMoney = dashboard?.wallets?.secondary?.online_balance ?? 0; // Only online buy-ins
-  
-  // Debug: Log values to verify
-  useEffect(() => {
-    if (dashboard?.wallets?.secondary) {
-      console.log('💰 Dashboard Wallet Data:', {
-        cash_balance: dashboard.wallets.secondary.cash_balance,
-        online_balance: dashboard.wallets.secondary.online_balance,
-        current: dashboard.wallets.secondary.current,
-        cashInHand,
-        onlineMoney
-      });
-    }
-  }, [dashboard, cashInHand, onlineMoney]);
+  const secondaryWallet = dashboard?.wallets?.secondary?.current || 0;
   const totalPayouts = dashboard?.totals?.withdrawals || 0;
   const totalExpenses = dashboard?.totals?.expenses || 0;
   const outstandingCredit = dashboard?.outstanding_credit || 0;
   const openingChips = dashboard?.chip_inventory?.opening || {};
   const currentChips = dashboard?.chip_inventory?.current_in_hand || {};
+  const onlineMoney = dashboard?.totals?.online_deposits || 0;
   const sbiMoney = dashboard?.totals?.sbi_deposits || 0;
   const hdfcMoney = dashboard?.totals?.hdfc_deposits || 0;
   const dealerTips = dashboard?.totals?.dealer_tips || 0;
@@ -50,13 +36,7 @@ const CashierDashboard = () => {
     setShowAddFloatModal(false);
     setShowViewFloatModal(false);
     setShowCloseDayModal(false);
-    // ✅ Immediately refresh to get fresh data for new session
-    // Wait a bit for backend to process, then refresh
-    setTimeout(async () => { 
-      await refreshDashboard(); 
-      // Force another refresh after a short delay to ensure fresh data
-      setTimeout(async () => { await refreshDashboard(); }, 500);
-    }, 1000);
+    setTimeout(async () => { await refreshDashboard(); }, 1500);
   };
 
   if (loading) {
@@ -121,7 +101,7 @@ const CashierDashboard = () => {
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="space-y-1">
-                <div className="flex justify-between text-sm"><span className="text-gray-600">Cash in Hand</span><span className="font-semibold text-black">{formatCurrency(cashInHand)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-600">Cash in Hand</span><span className="font-semibold text-black">{formatCurrency(secondaryWallet)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">Online Money</span><span className="font-semibold text-black">{formatCurrency(onlineMoney)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">SBI</span><span className="font-semibold text-black">{formatCurrency(sbiMoney)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-600">HDFC</span><span className="font-semibold text-black">{formatCurrency(hdfcMoney)}</span></div>

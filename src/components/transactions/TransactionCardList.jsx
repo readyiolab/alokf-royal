@@ -86,58 +86,26 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
     const type = t.transaction_type || '';
     const activityType = t.activity_type || '';
     
-    // ✅ Determine inflow/outflow
-    // Inflow = money/chips coming IN to cashier
-    // Outflow = money/chips going OUT from cashier
-    const inflowTypes = [
-      'buy_in',           // Cash coming in
-      'settle_credit',     // Cash coming in (credit repayment)
-      'add_float',         // Cash coming in (float addition)
-      'deposit_cash',      // Cash coming in (deposit)
-      'deposit_chips',     // Chips coming in (stored)
-      'opening_chips',     // Chips coming in (opening inventory)
-      'redeem_stored',     // Chips coming in (from stored)
-    ];
-    
-    const outflowTypes = [
-      'cash_payout',       // Cash going out
-      'credit_issued',     // Chips going out (credit)
-      'issue_credit',      // Chips going out (credit)
-      'return_chips',      // Chips going out (returned to player)
-    ];
+    // For cash flow: inflow means money coming IN to cashier
+    // For chip ledger: dealer_tip and player_expense mean chips coming IN to cashier
+    let isInflow = ['buy_in', 'settle_credit', 'add_float', 'deposit_cash'].includes(type);
     
     // Special case: dealer tips and player expenses - chips come IN to cashier
     // (even though cash goes OUT, the chips come back)
     const isChipInflow = activityType === 'dealer_tip' || activityType === 'player_expense';
     
-    // Special case: rakeback - chips go OUT to players
-    const isRakeback = activityType === 'rakeback' || type === 'rakeback';
-    
-    // Determine if this is an inflow
-    let isInflow = inflowTypes.includes(type);
-    
-    // Override for outflow types
-    if (outflowTypes.includes(type) || isRakeback) {
-      isInflow = false;
-    }
-    
-    // ✅ Proper naming convention - ALL transaction types
+    // Proper naming convention
     const typeLabels = {
-      'buy_in': 'Buy-in',
-      'cash_payout': 'Cash Payout',
+      'buy_in': 'Deposit',
+      'cash_payout': 'Withdrawal',
       'deposit_chips': 'Deposit Chips',
-      'deposit_cash': 'Deposit Cash',
       'return_chips': 'Return Chips',
-      'opening_chips': 'Opening Chips',
       'settle_credit': 'Settle Credit',
-      'credit_issued': 'Issue Credit',
-      'issue_credit': 'Issue Credit',
       'add_float': 'Add Float',
       'expense': activityType === 'club_expense' ? 'Club Expense' : 
                  activityType === 'dealer_tip' ? 'Dealer Tip' :
                  activityType === 'player_expense' ? 'Player Expense' : 'Expense',
       'redeem_stored': 'Redeem Stored',
-      'rakeback': 'Rakeback',
     };
     
     let label = typeLabels[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -160,16 +128,6 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
       label = 'Player Expense';
     }
     
-    // ✅ For rakeback, show as "Rakeback"
-    if (activityType === 'rakeback' || type === 'rakeback') {
-      label = 'Rakeback';
-    }
-    
-    // ✅ For credit issued, show as "Issue Credit" (chips going OUT)
-    if (type === 'credit_issued' || type === 'issue_credit') {
-      label = 'Issue Credit';
-    }
-    
     // For chip ledger display: dealer tips and player expenses show as chips IN (green)
     // because chips are being returned to cashier even though cash goes out
     const displayAsInflow = isInflow || isChipInflow;
@@ -186,26 +144,12 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
 
   const generateTransactionId = (t) => {
     if (t.transaction_id) {
-      // Determine prefix based on transaction type
-      let prefix = 'TXN';
-      const type = t.transaction_type || '';
-      if (type === 'credit_issued' || type === 'issue_credit') prefix = 'CRD';
-      else if (type === 'settle_credit') prefix = 'STL';
-      else if (type === 'return_chips' || type === 'redeem_stored') prefix = 'RET';
-      else if (type === 'buy_in') prefix = 'BUY';
-      else if (type === 'cash_payout') prefix = 'PAY';
-      
-      const date = new Date(t.created_at || Date.now()).toISOString().split('T')[0].replace(/-/g, '');
+      const prefix = 'BUY';
+      const date = new Date(t.created_at).toISOString().split('T')[0].replace(/-/g, '');
       const shortId = String(t.transaction_id).slice(-4).toUpperCase();
       return `${prefix}-${date}-${shortId}`;
     }
-    // Fallback: use credit_id or other identifier
-    if (t.credit_id) {
-      return `CRD-${String(t.credit_id).slice(-4).toUpperCase()}`;
-    }
-    // Last resort: use timestamp
-    const timestamp = new Date(t.created_at || Date.now()).getTime().toString().slice(-6);
-    return `TXN-${timestamp}`;
+    return 'N/A';
   };
 
   const handleAddNote = (transaction) => {
@@ -339,10 +283,6 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                               }
                               return transaction.cashier_name || 'CEO';
                             }
-                            // For opening_chips, show "System"
-                            if (transaction.transaction_type === 'opening_chips') {
-                              return 'System';
-                            }
                             // For deposit_chips (storing chips), show player name with "Stored"
                             if (transaction.transaction_type === 'deposit_chips') {
                               return transaction.player_name ? `${transaction.player_name} (Stored)` : 'Stored';
@@ -364,16 +304,6 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                               </span>
                             </span>
                           )}
-                          {/* Show payment mode for settle_credit transactions */}
-                          {transaction.transaction_type === 'settle_credit' && transaction.payment_mode && (
-                            <span className="ml-2">
-                              • <span className="font-medium">
-                                {transaction.payment_mode === 'cash' ? 'Cash' : 
-                                 transaction.payment_mode.startsWith('online_') ? 'Online' : 
-                                 transaction.payment_mode.replace('online_', '').toUpperCase()}
-                              </span>
-                            </span>
-                          )}
                         </span>
                         {/* Small screenshot icon for online buy-ins */}
                         {transaction.transaction_type === 'buy_in' && 
@@ -384,31 +314,7 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                             <PopoverTrigger asChild>
                               <button
                                 type="button"
-                                className="text-blue-600 hover:text-blue-700 transition-colors ml-2"
-                                title="View Payment Screenshot"
-                              >
-                                <ImageIcon className="w-4 h-4" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-2" align="start">
-                              <img
-                                src={transaction.screenshot_url}
-                                alt="Payment Screenshot"
-                                className="w-64 h-auto rounded border border-gray-200"
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                        {/* Small screenshot icon for online settle_credit transactions */}
-                        {transaction.transaction_type === 'settle_credit' && 
-                         transaction.payment_mode && 
-                         transaction.payment_mode !== 'cash' && 
-                         transaction.screenshot_url && (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="text-blue-600 hover:text-blue-700 transition-colors ml-2"
+                                className="text-blue-600 hover:text-blue-700 transition-colors"
                                 title="View Payment Screenshot"
                               >
                                 <ImageIcon className="w-4 h-4" />
@@ -482,43 +388,6 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                         </div>
                       )}
                       
-                      {/* Chip Value Display - For opening_chips, deposit_chips, redeem_stored */}
-                      {(() => {
-                        const isChipTransaction = transaction.transaction_type === 'opening_chips' || 
-                                                   transaction.transaction_type === 'deposit_chips' ||
-                                                   transaction.transaction_type === 'redeem_stored';
-                        
-                        if (isChipTransaction) {
-                          let chipValue = 0;
-                          if (transaction.chips_amount && parseFloat(transaction.chips_amount) > 0) {
-                            chipValue = parseFloat(transaction.chips_amount);
-                          } else {
-                            // Calculate from chip breakdown
-                            chipValue = 
-                              (parseInt(transaction.chips_100 || 0) * 100) +
-                              (parseInt(transaction.chips_500 || 0) * 500) +
-                              (parseInt(transaction.chips_1000 || 0) * 1000) +
-                              (parseInt(transaction.chips_5000 || 0) * 5000) +
-                              (parseInt(transaction.chips_10000 || 0) * 10000);
-                          }
-                          
-                          if (chipValue > 0) {
-                            const label = transaction.transaction_type === 'opening_chips' ? 'Opening Chips Value' :
-                                         transaction.transaction_type === 'deposit_chips' ? 'Chips Deposited' :
-                                         'Chips Redeemed';
-                            
-                            return (
-                              <div className="mt-2">
-                                <Badge className="bg-blue-100 text-blue-700 text-xs border border-blue-200 font-semibold">
-                                  {label}: {formatCurrency(chipValue)}
-                                </Badge>
-                              </div>
-                            );
-                          }
-                        }
-                        return null;
-                      })()}
-
                       {/* Bonus Indicator - Show if chips_amount > amount (bonus was applied) */}
                       {transaction.chips_amount && transaction.amount && parseFloat(transaction.chips_amount) > parseFloat(transaction.amount) && (
                         <div className="mt-2">
@@ -587,42 +456,9 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
                     
                     {/* Amount */}
                     <div className="text-right min-w-[100px]">
-                      {(() => {
-                        // For opening_chips and deposit_chips, show chips_amount instead of amount
-                        const isChipTransaction = transaction.transaction_type === 'opening_chips' || 
-                                                   transaction.transaction_type === 'deposit_chips' ||
-                                                   transaction.transaction_type === 'redeem_stored';
-                        
-                        // For chip transactions, use chips_amount if available, otherwise calculate from chip breakdown
-                        let displayAmount = transaction.amount || 0;
-                        if (isChipTransaction) {
-                          if (transaction.chips_amount && parseFloat(transaction.chips_amount) > 0) {
-                            displayAmount = parseFloat(transaction.chips_amount);
-                          } else {
-                            // Calculate from chip breakdown
-                            const chipValue = 
-                              (parseInt(transaction.chips_100 || 0) * 100) +
-                              (parseInt(transaction.chips_500 || 0) * 500) +
-                              (parseInt(transaction.chips_1000 || 0) * 1000) +
-                              (parseInt(transaction.chips_5000 || 0) * 5000) +
-                              (parseInt(transaction.chips_10000 || 0) * 10000);
-                            if (chipValue > 0) {
-                              displayAmount = chipValue;
-                            }
-                          }
-                        }
-                        
-                        // Don't show ₹0 for chip transactions
-                        if (isChipTransaction && displayAmount === 0) {
-                          return null;
-                        }
-                        
-                        return (
-                          <p className={`text-lg font-bold ${amountColor}`}>
-                            {isInflow ? '+' : ''}{formatCurrency(displayAmount)}
-                          </p>
-                        );
-                      })()}
+                      <p className={`text-lg font-bold ${amountColor}`}>
+                        {isInflow ? '+' : ''}{formatCurrency(transaction.amount || 0)}
+                      </p>
                     </div>
                   </div>
                 </div>
