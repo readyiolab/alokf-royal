@@ -565,6 +565,12 @@ const CashierTransactions = () => {
                     <span className="font-semibold text-black">{formatCurrency(dashboard?.totals?.hdfc_deposits || 0)}</span>
                   </div>
                 </div>
+                <div className="pt-2 border-t border-gray-200">
+                  <div className="flex justify-between text-sm font-semibold">
+                    <span className="text-gray-700">Total Money</span>
+                    <span className="text-black">{formatCurrency((dashboard?.wallets?.secondary?.cash_balance || 0) + (dashboard?.wallets?.secondary?.online_balance || 0))}</span>
+                  </div>
+                </div>
                 {!isSessionActive && (
                   <p className="text-xs text-gray-500 mt-2">Day closed - Start new day to see stats</p>
                 )}

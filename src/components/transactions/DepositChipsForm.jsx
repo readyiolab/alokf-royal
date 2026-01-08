@@ -55,7 +55,10 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
     player_name: '',
     phone_number: '',
     notes: '',
-    cash_amount: ''
+    cash_amount: '',
+    payment_type: 'cash', // 'cash' or 'online'
+    payment_mode: '', // 'cash', 'online_sbi', 'online_hdfc', 'online_other'
+    screenshot: null // File object for screenshot
   });
 
   // ✅ Chips received from player (counts, not amounts)
@@ -207,16 +210,49 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
         setSuccessMessage(`${formatCurrency(totalValue)} chips deposited. Stored balance: ${formatCurrency(result.total_stored_chips)}`);
       } else {
         // Deposit Cash
+        // Validate payment mode
+        if (!formData.payment_type) {
+          throw new Error('Please select payment mode (Cash or Online)');
+        }
+
+        // Validate bank selection for Online
+        if (formData.payment_type === 'online' && !formData.payment_mode) {
+          throw new Error('Please select a bank for online deposit');
+        }
+
+        // Validate screenshot for Online
+        if (formData.payment_type === 'online' && !formData.screenshot) {
+          throw new Error('Screenshot is required for online deposits');
+        }
+
+        // Prepare payload
         const payload = {
           player_id: selectedPlayerId,
           player_name: formData.player_name.trim(),
           phone_number: formData.phone_number.trim(),
           amount: cashAmount,
+          payment_type: formData.payment_type,
+          payment_mode: formData.payment_mode || 'cash',
           notes: formData.notes.trim() || `Cash deposit by ${formData.player_name}`,
         };
 
-        const result = await transactionService.depositCash(token, payload);
-        setSuccessMessage(`${formatCurrency(cashAmount)} cash deposited. Added to secondary wallet.`);
+        // Use FormData if screenshot is present
+        let result;
+        if (formData.screenshot) {
+          const formDataToSend = new FormData();
+          Object.keys(payload).forEach(key => {
+            formDataToSend.append(key, payload[key]);
+          });
+          formDataToSend.append('screenshot', formData.screenshot);
+          result = await transactionService.depositCash(token, formDataToSend, true); // true for FormData
+        } else {
+          result = await transactionService.depositCash(token, payload);
+        }
+
+        const walletType = formData.payment_type === 'cash' 
+          ? 'Cash in Hand' 
+          : `Online Money (${formData.payment_mode.replace('online_', '').toUpperCase()})`;
+        setSuccessMessage(`${formatCurrency(cashAmount)} cash deposited. Added to Secondary Wallet → ${walletType}. Store Balance increased.`);
       }
 
       setSuccess(true);
@@ -422,10 +458,11 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
               <span className="text-gray-900">Cash Deposit</span>
             </CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              Player deposits cash - goes to secondary wallet
+              Player deposits cash - goes to Secondary Wallet (increases Store Balance)
             </p>
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
+            {/* Cash Amount */}
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-900">
                 Cash Amount (₹) *
@@ -441,18 +478,124 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
               />
             </div>
 
+            {/* Payment Mode Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-900">
+                Payment Mode *
+              </Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({
+                      ...prev,
+                      payment_type: 'cash',
+                      payment_mode: 'cash',
+                      screenshot: null
+                    }));
+                  }}
+                  className={`h-12 rounded-lg border-2 font-semibold transition-all ${
+                    formData.payment_type === 'cash'
+                      ? 'bg-green-600 text-white border-green-600 shadow-md'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-green-400'
+                  }`}
+                >
+                  Cash
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({
+                      ...prev,
+                      payment_type: 'online',
+                      payment_mode: '',
+                      screenshot: null
+                    }));
+                  }}
+                  className={`h-12 rounded-lg border-2 font-semibold transition-all ${
+                    formData.payment_type === 'online'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  Online
+                </button>
+              </div>
+            </div>
+
+            {/* Bank Selection (Only for Online) */}
+            {formData.payment_type === 'online' && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-900">
+                  Select Bank *
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['SBI', 'HDFC', 'Other'].map((bank) => {
+                    const bankCode = bank.toLowerCase() === 'other' ? 'other' : bank.toLowerCase();
+                    const paymentMode = `online_${bankCode}`;
+                    return (
+                      <button
+                        key={bank}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, payment_mode: paymentMode }));
+                        }}
+                        className={`h-11 rounded-lg border-2 font-semibold text-sm transition-all ${
+                          formData.payment_mode === paymentMode
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                        }`}
+                      >
+                        {bank}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Screenshot Upload (Mandatory for Online) */}
+            {formData.payment_type === 'online' && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-900">
+                  Screenshot * <span className="text-red-500">(Required for Online)</span>
+                </Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setFormData(prev => ({ ...prev, screenshot: file }));
+                    }
+                  }}
+                  className="h-11"
+                />
+                {formData.screenshot && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    {formData.screenshot.name}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Info Alert */}
             {cashAmount > 0 && (
-              <Alert className="border-green-200 bg-green-50">
-                <Wallet className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
+              <Alert className={`${formData.payment_type === 'cash' ? 'border-green-200 bg-green-50' : 'border-blue-200 bg-blue-50'}`}>
+                <Wallet className={`h-4 w-4 ${formData.payment_type === 'cash' ? 'text-green-600' : 'text-blue-600'}`} />
+                <AlertDescription className={formData.payment_type === 'cash' ? 'text-green-800' : 'text-blue-800'}>
                   <div className="flex justify-between items-center">
                     <span className="font-semibold">Amount to Deposit:</span>
-                    <span className="text-xl font-bold text-green-600">
+                    <span className={`text-xl font-bold ${formData.payment_type === 'cash' ? 'text-green-600' : 'text-blue-600'}`}>
                       {formatCurrency(cashAmount)}
                     </span>
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    This cash will be added to secondary wallet immediately.
+                    {formData.payment_type === 'cash' 
+                      ? 'Will be added to Secondary Wallet → Cash in Hand. Increases Store Balance.'
+                      : `Will be added to Secondary Wallet → Online Money (${formData.payment_mode?.replace('online_', '').toUpperCase() || 'Bank'}). Increases Store Balance.`
+                    }
                   </p>
                 </AlertDescription>
               </Alert>
@@ -503,7 +646,12 @@ const DepositChipsForm = ({ onSuccess, onCancel }) => {
           disabled={
             loading ||
             !selectedPlayerId ||
-            (depositType === 'chips' ? (totalValue === 0 || totalChipCount === 0) : cashAmount <= 0)
+            (depositType === 'chips' 
+              ? (totalValue === 0 || totalChipCount === 0) 
+              : cashAmount <= 0 || 
+                !formData.payment_type || 
+                (formData.payment_type === 'online' && (!formData.payment_mode || !formData.screenshot))
+            )
           }
           className={`flex-1 h-11 disabled:bg-gray-400 disabled:cursor-not-allowed ${
             depositType === 'chips' 

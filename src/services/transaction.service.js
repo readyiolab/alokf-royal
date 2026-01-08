@@ -170,9 +170,9 @@ class TransactionService {
    * ✅ DEPOSIT CASH (New)
    * Player deposits cash which goes to secondary wallet
    */
-  async depositCash(token, data) {
+  async depositCash(token, data, isFormData = false) {
     try {
-      const response = await apiService.post("/transactions/deposit-cash", data, token);
+      const response = await apiService.post("/transactions/deposit-cash", data, token, isFormData);
       return response;
     } catch (error) {
       throw apiService.handleError(error);

@@ -85,10 +85,13 @@ class ApiService {
   }
 
   // ================= HEADERS =================
-  getHeaders(token) {
-    const headers = {
-      'Content-Type': 'application/json'
-    };
+  getHeaders(token, isFormData = false) {
+    const headers = {};
+
+    // Don't set Content-Type for FormData - browser will set it with boundary
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (token) {
       headers.Authorization = `Bearer ${token}`;
@@ -101,14 +104,23 @@ class ApiService {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const token = options.token || localStorage.getItem('auth_token');
+    const isFormData = options.isFormData || false;
+
+    // Handle FormData vs JSON body
+    let body;
+    if (isFormData && options.body instanceof FormData) {
+      body = options.body; // Use FormData as-is
+    } else if (options.body) {
+      body = JSON.stringify(options.body);
+    }
 
     const config = {
       method: options.method || 'GET',
       headers: {
-        ...this.getHeaders(token),
+        ...this.getHeaders(token, isFormData),
         ...options.headers
       },
-      body: options.body ? JSON.stringify(options.body) : undefined
+      body: body
     };
 
     try {
@@ -143,8 +155,8 @@ class ApiService {
     return this.request(endpoint, { method: 'GET', token });
   }
 
-  post(endpoint, data, token = null) {
-    return this.request(endpoint, { method: 'POST', body: data, token });
+  post(endpoint, data, token = null, isFormData = false) {
+    return this.request(endpoint, { method: 'POST', body: data, token, isFormData });
   }
 
   put(endpoint, data, token = null) {

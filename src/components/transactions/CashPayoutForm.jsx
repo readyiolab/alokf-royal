@@ -62,6 +62,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
 
   // Toggle to include stored balance
   const [includeStoredBalance, setIncludeStoredBalance] = useState(false);
+  const [storedBalanceAmount, setStoredBalanceAmount] = useState(0); // Partial stored balance amount
 
   // Toggle to adjust outstanding credit
   const [adjustOutstandingCredit, setAdjustOutstandingCredit] = useState(false);
@@ -124,8 +125,9 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
   const enteredAmount = totalChipsToCashOut ? parseFloat(totalChipsToCashOut) : 0;
   const totalValue = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
 
-  // Calculate total payout including stored balance if toggle is ON
-  let totalPayoutAmount = includeStoredBalance ? totalValue + storedBalance : totalValue;
+  // Calculate total payout including stored balance if toggle is ON (use partial amount)
+  const storedBalanceToUse = includeStoredBalance ? storedBalanceAmount : 0;
+  let totalPayoutAmount = totalValue + storedBalanceToUse;
 
   // Adjust for outstanding credit if toggle is ON
   if (adjustOutstandingCredit && creditSettleAmount > 0) {
@@ -204,6 +206,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     setSearchQuery(player.player_name);
     setTotalChipsToCashOut("");
     setIncludeStoredBalance(false);
+    setStoredBalanceAmount(0);
     setAdjustOutstandingCredit(false);
     setFormData(prev => ({
       ...prev,
@@ -270,10 +273,13 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
     try {
       const physicalChipsAmount = chipBreakdownTotal > 0 ? chipBreakdownTotal : enteredAmount;
 
+      // Validate stored balance amount doesn't exceed available
+      if (includeStoredBalance && storedBalanceAmount > storedBalance) {
+        throw new Error(`Stored balance amount (₹${storedBalanceAmount.toLocaleString("en-IN")}) cannot exceed available stored balance (₹${storedBalance.toLocaleString("en-IN")})`);
+      }
+
       // Calculate total payout amount (before credit adjustment)
-      const totalPayoutBeforeCredit = includeStoredBalance
-        ? physicalChipsAmount + storedBalance
-        : physicalChipsAmount;
+      const totalPayoutBeforeCredit = physicalChipsAmount + storedBalanceToUse;
 
       // Backend will handle credit adjustment, but we pass the pre-adjusted amount
       // The backend will calculate the final net payout based on the toggle
@@ -283,12 +289,12 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
       if (!payoutNotes) {
         if (adjustOutstandingCredit && outstandingCredit > 0) {
           payoutNotes = `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")}`;
-          if (includeStoredBalance && storedBalance > 0) {
-            payoutNotes += ` + Stored ₹${storedBalance.toLocaleString("en-IN")}`;
+          if (includeStoredBalance && storedBalanceAmount > 0) {
+            payoutNotes += ` + Stored ₹${storedBalanceAmount.toLocaleString("en-IN")}`;
           }
           payoutNotes += ` - Credit ₹${Math.min(outstandingCredit, totalPayoutBeforeCredit).toLocaleString("en-IN")} = Net ₹${totalPayoutAmount.toLocaleString("en-IN")}`;
-        } else if (includeStoredBalance && storedBalance > 0) {
-          payoutNotes = `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")} + Stored ₹${storedBalance.toLocaleString("en-IN")} = Total ₹${totalPayoutBeforeCredit.toLocaleString("en-IN")}`;
+        } else if (includeStoredBalance && storedBalanceAmount > 0) {
+          payoutNotes = `Cash payout: Physical chips ₹${physicalChipsAmount.toLocaleString("en-IN")} + Stored ₹${storedBalanceAmount.toLocaleString("en-IN")} = Total ₹${totalPayoutBeforeCredit.toLocaleString("en-IN")}`;
         } else {
           payoutNotes = `Cash payout from physical chips (winnings)`;
         }
@@ -304,7 +310,7 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
         chip_breakdown: chipsReceived, // Only physical chips
         notes: payoutNotes,
         include_stored_balance: includeStoredBalance, // Flag for backend
-        stored_balance_amount: includeStoredBalance ? storedBalance : 0, // Amount from stored
+        stored_balance_amount: includeStoredBalance ? storedBalanceAmount : 0, // Partial amount from stored
         adjust_outstanding_credit: adjustOutstandingCredit, // Toggle to adjust outstanding credit
         manual_credit_settlement: adjustOutstandingCredit ? creditSettleAmount : undefined, // Manual credit settlement amount
         ceo_permission_confirmed: isHousePlayer ? ceoPermissionConfirmed : undefined,
@@ -378,9 +384,9 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
             <CardContent className="p-4 text-center">
               <p className="text-sm text-emerald-600 font-medium">Total Cash Paid</p>
               <p className="text-4xl font-black text-emerald-800">{formatCurrency(totalPayoutAmount)}</p>
-              {includeStoredBalance && storedBalance > 0 && (
+              {includeStoredBalance && storedBalanceAmount > 0 && (
                 <p className="text-xs text-gray-600 mt-2">
-                  Physical: {formatCurrency(totalValue)} + Stored: {formatCurrency(storedBalance)}
+                  Physical: {formatCurrency(totalValue)} + Stored: {formatCurrency(storedBalanceAmount)}
                 </p>
               )}
             </CardContent>
@@ -626,14 +632,73 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                           <Switch
                             id="include-stored"
                             checked={includeStoredBalance}
-                            onCheckedChange={setIncludeStoredBalance}
+                            onCheckedChange={(checked) => {
+                              setIncludeStoredBalance(checked);
+                              if (checked) {
+                                setStoredBalanceAmount(storedBalance); // Default to full amount
+                              } else {
+                                setStoredBalanceAmount(0);
+                              }
+                            }}
                             disabled={storedBalance <= 0}
                           />
                         </div>
                       </div>
+
                       {includeStoredBalance && (
-                        <div className="bg-blue-100 rounded p-2 text-xs text-blue-800 mt-2">
-                          ✅ Will be added to payout
+                        <div className="space-y-2 mt-2 pt-2 border-t border-blue-200">
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium text-blue-900">
+                              Amount to Use from Stored Balance (₹)
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max={storedBalance}
+                              step="100"
+                              value={storedBalanceAmount}
+                              onChange={(e) => {
+                                const val = Math.min(parseFloat(e.target.value) || 0, storedBalance);
+                                setStoredBalanceAmount(val);
+                              }}
+                              className="h-9 text-sm font-mono border-blue-300 focus:border-blue-500"
+                              placeholder="Enter amount"
+                            />
+                            <div className="flex gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setStoredBalanceAmount(storedBalance)}
+                                className="text-xs h-7 px-2"
+                              >
+                                Full
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setStoredBalanceAmount(Math.floor(storedBalance / 2))}
+                                className="text-xs h-7 px-2"
+                              >
+                                Half
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="bg-blue-100 rounded p-2 text-xs text-blue-800">
+                            ✅ ₹{storedBalanceAmount.toLocaleString("en-IN")} will be added to payout
+                            {storedBalanceAmount < storedBalance && (
+                              <span className="block mt-1 text-blue-600">
+                                Remaining: ₹{(storedBalance - storedBalanceAmount).toLocaleString("en-IN")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {!includeStoredBalance && storedBalance > 0 && (
+                        <div className="bg-gray-100 rounded p-2 text-xs text-gray-600 mt-2">
+                          ℹ️ Stored balance not included
                         </div>
                       )}
                     </CardContent>
@@ -819,11 +884,11 @@ export const CashPayoutForm = ({ onSuccess, onCancel }) => {
                           </span>
                         </div>
                         
-                        {includeStoredBalance && storedBalance > 0 && (
+                        {includeStoredBalance && storedBalanceAmount > 0 && (
                           <div className="flex justify-between text-xs pt-2 border-t border-emerald-200">
                             <span className="text-gray-700">+ Stored balance</span>
                             <span className="font-mono font-semibold text-gray-900">
-                              ₹{storedBalance.toLocaleString("en-IN")}
+                              ₹{storedBalanceAmount.toLocaleString("en-IN")}
                             </span>
                           </div>
                         )}

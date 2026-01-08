@@ -80,16 +80,11 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
     setError('');
 
     try {
+      // ✅ Add Float: Only cash, no chips
       await cashierService.addCashFloat(
         parseFloat(floatAmount),
         floatNotes,
-        {
-          chips_100: 0,
-          chips_500: 0,
-          chips_1000: 0,
-          chips_5000: 0,
-          chips_10000: 0,
-        }
+        null // No chips when adding float only
       );
 
       toast({
@@ -117,21 +112,21 @@ const TopUpFloatModal = ({ open, onOpenChange, onSuccess }) => {
     setError('');
 
     try {
-      await cashierService.addCashFloat(
-        chipTotal,
-        chipNotes,
+      // ✅ Add Chips: Only chips, no money to float
+      await cashierService.addChipsOnly(
         {
           chips_100: parseInt(chipBreakdown.chips_100) || 0,
           chips_500: parseInt(chipBreakdown.chips_500) || 0,
           chips_1000: parseInt(chipBreakdown.chips_1000) || 0,
           chips_5000: parseInt(chipBreakdown.chips_5000) || 0,
           chips_10000: parseInt(chipBreakdown.chips_10000) || 0,
-        }
+        },
+        chipNotes
       );
 
       toast({
         title: 'Success',
-        description: `Chips worth ₹${chipTotal.toLocaleString('en-IN')} added successfully`,
+        description: `Chips worth ₹${chipTotal.toLocaleString('en-IN')} added to inventory successfully`,
       });
 
       handleClose();

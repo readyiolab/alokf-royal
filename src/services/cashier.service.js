@@ -438,6 +438,36 @@ class CashierService {
   }
 
   /**
+   * Add chips only (no float change)
+   * POST /api/cashier/add-chips
+   */
+  async addChipsOnly(chipBreakdown, notes = '') {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No authentication token. Please login first.');
+      }
+
+      const response = await apiService.post(
+        '/cashier/add-chips',
+        {
+          chip_breakdown: chipBreakdown,
+          notes
+        },
+        token
+      );
+
+      return {
+        success: true,
+        data: response.data || response
+      };
+    } catch (error) {
+      console.error('Add chips only error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * ✅ NEW: Get float addition history
    * GET /api/cashier/float-history
    */
