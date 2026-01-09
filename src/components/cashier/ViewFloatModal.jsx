@@ -83,6 +83,7 @@ const ViewFloatModal = ({ open, onOpenChange }) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
       dateStyle: 'short',
       timeStyle: 'short',
     }).format(date);

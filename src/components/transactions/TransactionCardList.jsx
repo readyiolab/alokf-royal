@@ -73,13 +73,22 @@ const TransactionCardList = ({ transactions = [], onRefresh, disableNotesAndReve
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    return date.toLocaleDateString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit', 
+      month: 'short' 
+    });
   };
 
   const getTransactionTypeInfo = (t) => {

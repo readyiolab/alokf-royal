@@ -242,17 +242,33 @@ const CashierLayout = ({ children }) => {
   // Fetch available cashiers when assign dialog opens
   useEffect(() => {
     const fetchAvailableCashiers = async () => {
-      if (!showAssignCashierDialog || !hasValidSession) return;
+      if (!showAssignCashierDialog || !hasValidSession) {
+        setAvailableCashiers([]);
+        return;
+      }
 
       try {
+        // Refresh shift info first to get the latest shift data
+        const shiftsRes = await cashierShiftService.getAllShifts();
+        let updatedShifts = [];
+        if (shiftsRes.success && shiftsRes.data) {
+          updatedShifts = shiftsRes.data;
+          setAllSessionShifts(updatedShifts);
+        }
+
+        // Then fetch all cashiers
         const response = await userService.getAllUsers('cashier');
         const allCashiersList = response?.data || response || [];
         const activeCashiers = allCashiersList.filter(c => c.is_active !== 0);
 
-        if (allSessionShifts && allSessionShifts.length > 0) {
-          const activeShiftCashierIds = allSessionShifts
-            .filter(s => s.is_active === 1 || s.is_active === true || s.is_active === '1')
+        if (updatedShifts && updatedShifts.length > 0) {
+          const activeShiftCashierIds = updatedShifts
+            .filter(s => {
+              const isActive = s.is_active === 1 || s.is_active === true || s.is_active === '1' || parseInt(s.is_active) === 1;
+              return isActive;
+            })
             .map(s => parseInt(s.cashier_id));
+          
           const available = activeCashiers.filter(c => {
             const cashierId = parseInt(c.cashier_id || c.user_id);
             return !activeShiftCashierIds.includes(cashierId);
@@ -264,11 +280,12 @@ const CashierLayout = ({ children }) => {
       } catch (err) {
         console.error('Error fetching cashiers:', err);
         toast.error('Failed to load cashiers');
+        setAvailableCashiers([]);
       }
     };
 
     fetchAvailableCashiers();
-  }, [showAssignCashierDialog, hasValidSession, allSessionShifts]);
+  }, [showAssignCashierDialog, hasValidSession]);
 
   const handleAssignCashier = async () => {
     if (!selectedCashierId) {
@@ -406,7 +423,7 @@ const CashierLayout = ({ children }) => {
                 <Coins className="w-6 h-6 text-white group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:h-7" />
               </div>
               <div className="flex flex-col group-data-[collapsible=icon]:hidden min-w-0">
-                <h1 className="font-bold text-gray-900 text-base leading-tight">Royal Flush</h1>
+                <h1 className="font-bold text-gray-900 text-base leading-tight">RoyalFlush</h1>
                 <p className="text-xs text-gray-500 leading-tight">Cashier Module</p>
               </div>
             </div>
@@ -464,10 +481,12 @@ const CashierLayout = ({ children }) => {
           <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="mr-2" />
-              <div className="flex items-center gap-2 text-gray-900">
-                <User className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-semibold">{user?.full_name || user?.username || 'Cashier'}</span>
-              </div>
+              {activeShift && (
+                <div className="flex items-center gap-2 text-gray-900">
+                  <User className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-semibold">{activeShift.cashier_name || activeShift.full_name || 'Cashier'}</span>
+                </div>
+              )}
             </div>
 
           <div className="flex items-center gap-4">
@@ -708,8 +727,10 @@ const CashierLayout = ({ children }) => {
                   Download CSV
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     setShowEndShiftDialog(false);
+                    // Refresh shift info before opening assign dialog to get updated shift list
+                    await fetchShiftInfo();
                     setShowAssignCashierDialog(true);
                   }}
                   className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
@@ -734,7 +755,13 @@ const CashierLayout = ({ children }) => {
       </Dialog>
 
       {/* Assign New Cashier Dialog */}
-      <Dialog open={showAssignCashierDialog} onOpenChange={setShowAssignCashierDialog}>
+      <Dialog open={showAssignCashierDialog} onOpenChange={(open) => {
+        setShowAssignCashierDialog(open);
+        if (!open) {
+          // Reset state when dialog closes
+          setSelectedCashierId('');
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Assign New Cashier</DialogTitle>
@@ -747,21 +774,31 @@ const CashierLayout = ({ children }) => {
             <div className="space-y-2">
               <Label>Select Cashier</Label>
               <Select
-                value={selectedCashierId}
-                onValueChange={setSelectedCashierId}
+                value={selectedCashierId || undefined}
+                onValueChange={(value) => setSelectedCashierId(value || '')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a cashier..." />
                 </SelectTrigger>
                 <SelectContent>
                   {availableCashiers.length > 0 ? (
-                    availableCashiers.map((cashier) => (
-                      <SelectItem key={cashier.user_id || cashier.cashier_id} value={(cashier.user_id || cashier.cashier_id)?.toString()}>
-                        {cashier.full_name || cashier.username}
-                      </SelectItem>
-                    ))
+                    availableCashiers
+                      .filter((cashier) => {
+                        // Only include cashiers with valid IDs
+                        const cashierId = cashier.user_id || cashier.cashier_id;
+                        return cashierId !== null && cashierId !== undefined && cashierId !== '';
+                      })
+                      .map((cashier) => {
+                        const cashierId = (cashier.user_id || cashier.cashier_id)?.toString();
+                        const cashierName = cashier.full_name || cashier.username || 'Unknown Cashier';
+                        return (
+                          <SelectItem key={cashierId} value={cashierId}>
+                            {cashierName}
+                          </SelectItem>
+                        );
+                      })
                   ) : (
-                    <SelectItem value="" disabled>No available cashiers</SelectItem>
+                    <div className="px-2 py-1.5 text-sm text-gray-500">No available cashiers</div>
                   )}
                 </SelectContent>
               </Select>

@@ -60,6 +60,7 @@ const FloatChipsLog = () => {
     const parts = [];
     if (chips.chips_100 > 0) parts.push(`${chips.chips_100}×₹100`);
     if (chips.chips_500 > 0) parts.push(`${chips.chips_500}×₹500`);
+    if (chips.chips_1000 > 0) parts.push(`${chips.chips_1000}×₹1,000`);
     if (chips.chips_5000 > 0) parts.push(`${chips.chips_5000}×₹5,000`);
     if (chips.chips_10000 > 0) parts.push(`${chips.chips_10000}×₹10,000`);
     return parts.join(' ');
@@ -68,13 +69,15 @@ const FloatChipsLog = () => {
   const getChipCount = (chips) => {
     if (!chips) return 0;
     return (chips.chips_100 || 0) + (chips.chips_500 || 0) + 
-           (chips.chips_5000 || 0) + (chips.chips_10000 || 0);
+           (chips.chips_1000 || 0) + (chips.chips_5000 || 0) + 
+           (chips.chips_10000 || 0);
   };
 
   const getChipValue = (chips) => {
     if (!chips) return 0;
     return (chips.chips_100 || 0) * 100 + 
            (chips.chips_500 || 0) * 500 + 
+           (chips.chips_1000 || 0) * 1000 +
            (chips.chips_5000 || 0) * 5000 + 
            (chips.chips_10000 || 0) * 10000;
   };
@@ -182,12 +185,14 @@ const FloatChipsLog = () => {
             const chipsValue = getChipValue({
               chips_100: session.chips_100_opening || 0,
               chips_500: session.chips_500_opening || 0,
+              chips_1000: session.chips_1000_opening || 0,
               chips_5000: session.chips_5000_opening || 0,
               chips_10000: session.chips_10000_opening || 0,
             });
             const chipsCount = getChipCount({
               chips_100: session.chips_100_opening || 0,
               chips_500: session.chips_500_opening || 0,
+              chips_1000: session.chips_1000_opening || 0,
               chips_5000: session.chips_5000_opening || 0,
               chips_10000: session.chips_10000_opening || 0,
             });
@@ -216,6 +221,7 @@ const FloatChipsLog = () => {
                   const entryChips = {
                     chips_100: entry.chips_100 || 0,
                     chips_500: entry.chips_500 || 0,
+                    chips_1000: entry.chips_1000 || 0,
                     chips_5000: entry.chips_5000 || 0,
                     chips_10000: entry.chips_10000 || 0,
                   };
@@ -267,12 +273,14 @@ const FloatChipsLog = () => {
   const totalChips = sessionData ? getChipValue({
     chips_100: sessionData.chips_100_opening || 0,
     chips_500: sessionData.chips_500_opening || 0,
+    chips_1000: sessionData.chips_1000_opening || 0,
     chips_5000: sessionData.chips_5000_opening || 0,
     chips_10000: sessionData.chips_10000_opening || 0,
   }) : 0;
   const chipCount = sessionData ? getChipCount({
     chips_100: sessionData.chips_100_opening || 0,
     chips_500: sessionData.chips_500_opening || 0,
+    chips_1000: sessionData.chips_1000_opening || 0,
     chips_5000: sessionData.chips_5000_opening || 0,
     chips_10000: sessionData.chips_10000_opening || 0,
   }) : 0;
@@ -281,6 +289,7 @@ const FloatChipsLog = () => {
   const openingChips = sessionData ? {
     chips_100: sessionData.chips_100_opening || 0,
     chips_500: sessionData.chips_500_opening || 0,
+    chips_1000: sessionData.chips_1000_opening || 0,
     chips_5000: sessionData.chips_5000_opening || 0,
     chips_10000: sessionData.chips_10000_opening || 0,
   } : null;
@@ -477,6 +486,7 @@ const FloatChipsLog = () => {
                     const entryChips = {
                       chips_100: entry.chips_100 || 0,
                       chips_500: entry.chips_500 || 0,
+                      chips_1000: entry.chips_1000 || 0,
                       chips_5000: entry.chips_5000 || 0,
                       chips_10000: entry.chips_10000 || 0,
                     };

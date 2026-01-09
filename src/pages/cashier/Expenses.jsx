@@ -64,6 +64,7 @@ const Expenses = () => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     return date.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
@@ -72,6 +73,7 @@ const Expenses = () => {
 
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       year: 'numeric'

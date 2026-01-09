@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, Coins, CreditCard, TrendingUp, Wallet, User, Search, ChevronsUpDown, CheckCircle } from 'lucide-react';
+import { AlertCircle, Loader2, Coins, CreditCard, TrendingUp, Wallet, User, Search, ChevronsUpDown, CheckCircle, Plus, Edit2, X } from 'lucide-react';
 import creditService from '../../services/credit.service';
+import playerService from '../../services/player.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlayerSearch } from '../../hooks/usePlayerSearch';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 export const CreditRequestForm = ({ 
   onSuccess, 
@@ -19,12 +21,24 @@ export const CreditRequestForm = ({
   totalCreditIssued = 0
 }) => {
   const { token } = useAuth();
+  const { toast } = useToast();
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [playerCreditStatus, setPlayerCreditStatus] = useState(null);
   const [loadingCreditStatus, setLoadingCreditStatus] = useState(false);
-  const [creditAmount, setCreditAmount] = useState('100000'); // Default: ₹100,000
+  const [creditAmount, setCreditAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [open, setOpen] = useState(false);
+  
+  // ✅ NEW: Add player form state
+  const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerPhone, setNewPlayerPhone] = useState('');
+  const [creatingPlayer, setCreatingPlayer] = useState(false);
+  
+  // ✅ NEW: Edit credit limit state
+  const [editingCreditLimit, setEditingCreditLimit] = useState(false);
+  const [creditLimitInput, setCreditLimitInput] = useState('');
+  const [savingCreditLimit, setSavingCreditLimit] = useState(false);
   
   // Player search
   const {
@@ -48,6 +62,7 @@ export const CreditRequestForm = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [phoneError, setPhoneError] = useState(null); // ✅ Phone number specific error
 
   // Load all players on mount
   useEffect(() => {
@@ -70,6 +85,107 @@ export const CreditRequestForm = ({
     setSelectedPlayer(player);
     setOpen(false);
     setError(null);
+    setShowAddPlayerForm(false);
+    setNewPlayerName('');
+    setNewPlayerPhone('');
+  };
+  
+  // ✅ NEW: Handle creating new player
+  const handleCreatePlayer = async () => {
+    if (!newPlayerName.trim()) {
+      setError('Player name is required');
+      return;
+    }
+    
+    // Clear previous errors
+    setError(null);
+    setPhoneError(null);
+    
+    // Validate phone number if provided
+    if (newPlayerPhone.trim() && (newPlayerPhone.trim().length < 10 || newPlayerPhone.trim().length > 10)) {
+      setPhoneError('Phone number must be exactly 10 digits');
+      return;
+    }
+    
+    setCreatingPlayer(true);
+    
+    try {
+      const newPlayer = await playerService.createPlayer({
+        player_name: newPlayerName.trim(),
+        phone_number: newPlayerPhone.trim() || null,
+        credit_limit: creditLimitInput ? parseFloat(creditLimitInput) : 0
+      });
+      
+      // Select the newly created player
+      const playerData = newPlayer.data || newPlayer;
+      setSelectedPlayer({
+        player_id: playerData.player_id,
+        player_name: playerData.player_name,
+        player_code: playerData.player_code,
+        phone_number: playerData.phone_number
+      });
+      
+      // Fetch credit status for new player
+      await fetchPlayerCreditStatus(playerData.player_id);
+      
+      // Reset form
+      setShowAddPlayerForm(false);
+      setNewPlayerName('');
+      setNewPlayerPhone('');
+      setCreditLimitInput('');
+      setPhoneError(null);
+      
+      toast({
+        title: 'Success',
+        description: `Player ${playerData.player_name} created successfully (${playerData.player_code})`
+      });
+    } catch (err) {
+      const errorMessage = err.message || 'Failed to create player';
+      // Check if error is related to phone number
+      if (errorMessage.toLowerCase().includes('phone') || errorMessage.toLowerCase().includes('number')) {
+        setPhoneError(errorMessage);
+      } else {
+        setError(errorMessage);
+      }
+    } finally {
+      setCreatingPlayer(false);
+    }
+  };
+  
+  // ✅ NEW: Handle updating credit limit
+  const handleUpdateCreditLimit = async () => {
+    if (!selectedPlayer || !selectedPlayer.player_id) {
+      setError('Please select a player first');
+      return;
+    }
+    
+    const limit = parseFloat(creditLimitInput);
+    if (isNaN(limit) || limit < 0) {
+      setError('Please enter a valid credit limit');
+      return;
+    }
+    
+    setSavingCreditLimit(true);
+    setError(null);
+    
+    try {
+      await playerService.setPlayerCreditLimit(selectedPlayer.player_id, limit);
+      
+      // Refresh credit status
+      await fetchPlayerCreditStatus(selectedPlayer.player_id);
+      
+      setEditingCreditLimit(false);
+      setCreditLimitInput('');
+      
+      toast({
+        title: 'Success',
+        description: `Credit limit updated to ${formatCurrency(limit)}`
+      });
+    } catch (err) {
+      setError(err.message || 'Failed to update credit limit');
+    } finally {
+      setSavingCreditLimit(false);
+    }
   };
 
   // ✅ Fetch player credit status when player is selected
@@ -181,7 +297,7 @@ export const CreditRequestForm = ({
       
       // Reset form
       setSelectedPlayer(null);
-      setCreditAmount('100000');
+      setCreditAmount('');
       setNotes('');
       setChipBreakdown({
         chips_100: 0,
@@ -203,6 +319,22 @@ export const CreditRequestForm = ({
 
   return (
     <div className="space-y-4">
+      {/* Error - Display at top, always visible (but not for phone errors) */}
+      {error && !phoneError && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm border border-destructive/20 sticky top-0 z-10">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Success - Display at top, always visible */}
+      {success && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm border border-green-200 sticky top-0 z-10">
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
       {/* Player Search */}
       <div className="space-y-2">
         <Label>Input Player Name</Label>
@@ -251,7 +383,24 @@ export const CreditRequestForm = ({
                 ) : (
                   <>
                     {filteredPlayers?.length === 0 && searchQuery && (
-                      <CommandEmpty>No player found</CommandEmpty>
+                      <CommandEmpty>
+                        <div className="flex flex-col items-center gap-2 py-4">
+                          <p className="text-sm text-muted-foreground">No player found</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowAddPlayerForm(true);
+                              setNewPlayerName(searchQuery);
+                              setOpen(false);
+                            }}
+                            className="mt-2"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add New Player
+                          </Button>
+                        </div>
+                      </CommandEmpty>
                     )}
                     {filteredPlayers?.length > 0 && (
                       <CommandGroup>
@@ -291,6 +440,93 @@ export const CreditRequestForm = ({
          
       </div>
 
+      {/* ✅ NEW: Add Player Form */}
+      {showAddPlayerForm && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-900">Add New Player</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowAddPlayerForm(false);
+                  setNewPlayerName('');
+                  setNewPlayerPhone('');
+                  setCreditLimitInput('');
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Player Name *</Label>
+              <Input
+                value={newPlayerName}
+                onChange={(e) => setNewPlayerName(e.target.value)}
+                placeholder="Enter player name"
+                className="h-11"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Phone Number (Optional)</Label>
+              <Input
+                type="tel"
+                value={newPlayerPhone}
+                onChange={(e) => {
+                  setNewPlayerPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+                  setPhoneError(null); // Clear error when user types
+                }}
+                placeholder="Enter 10-digit phone number"
+                className={cn("h-11", phoneError && "border-red-500 focus:border-red-500 focus:ring-red-500")}
+                maxLength={10}
+              />
+              {phoneError && (
+                <p className="text-sm text-red-600 flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {phoneError}
+                </p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Credit Limit (Optional)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                <Input
+                  type="number"
+                  min="0"
+                  value={creditLimitInput}
+                  onChange={(e) => setCreditLimitInput(e.target.value)}
+                  placeholder="Enter credit limit"
+                  className="pl-8 h-11"
+                />
+              </div>
+            </div>
+            
+            <Button
+              onClick={handleCreatePlayer}
+              disabled={creatingPlayer || !newPlayerName.trim()}
+              className="w-full"
+            >
+              {creatingPlayer ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Player
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Player Credit Status */}
       {selectedPlayer && (
         <Card className="bg-muted/50 border border-border">
@@ -310,14 +546,67 @@ export const CreditRequestForm = ({
                 </div>
                 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-card rounded-lg p-3 border border-border">
-                    <div className="flex items-center gap-1 mb-1">
-                      <Wallet className="w-3 h-3 text-purple-500" />
-                      <span className="text-xs text-muted-foreground">Credit Limit</span>
+                  <div className="bg-card rounded-lg p-3 border border-border relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1">
+                        <Wallet className="w-3 h-3 text-purple-500" />
+                        <span className="text-xs text-muted-foreground">Credit Limit</span>
+                      </div>
+                      {!editingCreditLimit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => {
+                            setEditingCreditLimit(true);
+                            setCreditLimitInput((playerCreditStatus.credit_limit || 0).toString());
+                          }}
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </Button>
+                      )}
                     </div>
-                    <p className="text-lg font-bold text-purple-700">
-                      {formatCurrency(playerCreditStatus.credit_limit || 0)}
-                    </p>
+                    {editingCreditLimit ? (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">₹</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={creditLimitInput}
+                            onChange={(e) => setCreditLimitInput(e.target.value)}
+                            className="pl-6 h-8 text-sm font-bold"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-6 text-xs flex-1"
+                            onClick={handleUpdateCreditLimit}
+                            disabled={savingCreditLimit}
+                          >
+                            {savingCreditLimit ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs flex-1"
+                            onClick={() => {
+                              setEditingCreditLimit(false);
+                              setCreditLimitInput('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-lg font-bold text-purple-700">
+                        {formatCurrency(playerCreditStatus.credit_limit || 0)}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="bg-card rounded-lg p-3 border border-red-200">
@@ -472,22 +761,6 @@ export const CreditRequestForm = ({
           className="h-11"
         />
       </div>
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Success */}
-      {success && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
-          <CheckCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{success}</span>
-        </div>
-      )}
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border">

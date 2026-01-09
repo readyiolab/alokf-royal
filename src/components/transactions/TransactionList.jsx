@@ -22,8 +22,17 @@ const ChipLedgerList = ({ transactions = [] }) => {
     if (!dateStr) return { time: '-', date: '-' };
     const date = new Date(dateStr);
     return {
-      time: date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-      date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+      time: date.toLocaleTimeString('en-IN', { 
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true
+      }),
+      date: date.toLocaleDateString('en-IN', { 
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit', 
+        month: 'short' 
+      }),
     };
   };
 

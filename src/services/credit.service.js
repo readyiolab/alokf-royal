@@ -176,7 +176,15 @@ class CreditService {
         style: 'currency',
         currency: 'INR',
       }).format(request.requested_amount),
-      formattedDate: new Date(request.created_at).toLocaleString('en-IN'),
+      formattedDate: new Date(request.created_at).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }),
       isAutoApproved: request.approval_notes?.includes('Auto-approved'),
       isPending: request.request_status === 'pending',
     };
