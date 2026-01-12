@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, MapPin, Calendar, AlertCircle, Badge, Activity, CreditCard, Settings } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, Calendar, AlertCircle, Badge, Activity, CreditCard, Settings, CheckCircle, ShieldCheck } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -305,12 +305,158 @@ export const PlayerDetails = ({ player, isOpen, onClose, onEdit, onPlayerUpdated
           )}
 
           {/* KYC Status */}
-          {player.kyc_status && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <p className="text-sm font-semibold text-gray-900 mb-2">KYC Status</p>
-              <BadgeComponent variant={player.kyc_status === 'verified' ? 'default' : 'secondary'}>
-                {player.kyc_status?.replace('_', ' ').toUpperCase()}
-              </BadgeComponent>
+          {player.kyc_status && (() => {
+            // Check if DigiLocker verification is complete
+            const hasDigiLockerVerification = player.kyc_details?.digilocker_verified || player.pan_details?.verified_via_digilocker;
+            const hasDocuments = player.kyc_details?.photo || player.pan_details?.pan_number;
+            
+            // If status is "submitted" but DigiLocker verification is complete with documents, treat as verified
+            const displayStatus = (player.kyc_status === 'submitted' && hasDigiLockerVerification && hasDocuments) 
+              ? 'verified' 
+              : player.kyc_status;
+            
+            return (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-900 mb-2">KYC Status</p>
+                <BadgeComponent variant={displayStatus === 'verified' || displayStatus === 'approved' ? 'default' : 'secondary'}>
+                  {(displayStatus === 'verified' || (displayStatus === 'submitted' && hasDigiLockerVerification && hasDocuments))
+                    ? 'KYC VERIFIED'
+                    : displayStatus?.replace('_', ' ').toUpperCase()}
+                </BadgeComponent>
+              </div>
+            );
+          })()}
+
+          {/* DigiLocker Verified Information */}
+          {(player.kyc_details?.digilocker_verified || player.pan_details?.verified_via_digilocker) && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-gray-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-green-600" />
+                DigiLocker Verified Information
+              </h3>
+              
+              {/* KYC Details from DigiLocker */}
+              {player.kyc_details?.digilocker_verified && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-sm font-semibold text-green-900">Verified via DigiLocker</p>
+                  </div>
+                  
+                  {player.kyc_details.id_type && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-green-700 font-medium mb-1">ID Type</p>
+                        <p className="text-sm font-semibold text-green-900 capitalize">
+                          {player.kyc_details.id_type}
+                        </p>
+                      </div>
+                      {player.kyc_details.id_number && (
+                        <div>
+                          <p className="text-xs text-green-700 font-medium mb-1">ID Number</p>
+                          <p className="text-sm font-semibold text-green-900">
+                            {player.kyc_details.id_number}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {player.kyc_details.photo && (
+                    <div>
+                      <p className="text-xs text-green-700 font-medium mb-2">Photo</p>
+                      <div className="rounded-lg overflow-hidden border border-green-300">
+                        <img 
+                          src={player.kyc_details.photo} 
+                          alt="KYC Photo" 
+                          className="w-full h-auto max-h-48 object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {player.kyc_details.submitted_at && (
+                    <div>
+                      <p className="text-xs text-green-700 font-medium mb-1">Submitted At</p>
+                      <p className="text-sm text-green-900">
+                        {new Date(player.kyc_details.submitted_at).toLocaleString('en-IN', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* PAN Details from DigiLocker */}
+              {player.pan_details?.verified_via_digilocker && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                    <p className="text-sm font-semibold text-blue-900">PAN Card Verified via DigiLocker</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {player.pan_details.pan_number && (
+                      <div>
+                        <p className="text-xs text-blue-700 font-medium mb-1">PAN Number</p>
+                        <p className="text-sm font-semibold text-blue-900 uppercase">
+                          {player.pan_details.pan_number}
+                        </p>
+                      </div>
+                    )}
+                    {player.pan_details.name_on_pan && (
+                      <div>
+                        <p className="text-xs text-blue-700 font-medium mb-1">Name on PAN</p>
+                        <p className="text-sm font-semibold text-blue-900 uppercase">
+                          {player.pan_details.name_on_pan}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {player.pan_details.dob && (
+                    <div>
+                      <p className="text-xs text-blue-700 font-medium mb-1">Date of Birth</p>
+                      <p className="text-sm text-blue-900">
+                        {new Date(player.pan_details.dob).toLocaleDateString('en-IN', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {player.pan_details.father_name && (
+                    <div>
+                      <p className="text-xs text-blue-700 font-medium mb-1">Father's Name</p>
+                      <p className="text-sm text-blue-900 uppercase">
+                        {player.pan_details.father_name}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {player.pan_details.created_at && (
+                    <div>
+                      <p className="text-xs text-blue-700 font-medium mb-1">Verified At</p>
+                      <p className="text-sm text-blue-900">
+                        {new Date(player.pan_details.created_at).toLocaleString('en-IN', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -33,6 +33,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  ShieldCheck,
+  MapPin,
 } from 'lucide-react';
 import playerService from '../../services/player.service';
 import transactionService from '../../services/transaction.service';
@@ -52,6 +54,7 @@ import {
 const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) => {
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [playerData, setPlayerData] = useState(null); // Store updated player data with DigiLocker info
   const [playerStats, setPlayerStats] = useState(null);
   const [playerBalance, setPlayerBalance] = useState(null);
   const [storedBalance, setStoredBalance] = useState(0);
@@ -118,10 +121,15 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
         playerService.getPlayerBonus(player.player_id).catch(() => ({ total_bonus: 0, total_claims: 0 })),
       ]);
       
-      // Update player object with latest data if available
-      let currentPlayer = player;
+      // Update player object with latest data if available (including DigiLocker info)
       if (updatedPlayer && updatedPlayer.data) {
-        Object.assign(currentPlayer, updatedPlayer.data);
+        // Store updated player data with DigiLocker info in state
+        // Merge with original player to preserve all fields (including DigiLocker info)
+        const mergedPlayerData = { ...player, ...updatedPlayer.data };
+        setPlayerData(mergedPlayerData);
+      } else {
+        // Use current player if no update available (may already have DigiLocker info from initial fetch)
+        setPlayerData(player);
       }
 
       setPlayerStats(statsResponse?.data || statsResponse || null);
@@ -307,9 +315,24 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
       .toUpperCase() || 'P';
   };
 
-  const getKYCStatusBadge = (status) => {
+  const getKYCStatusBadge = (status, playerData = null, originalPlayer = null) => {
+    // Check if DigiLocker verification is complete
+    // Check both playerData (fetched with DigiLocker info) and originalPlayer prop
+    const kycDetails = playerData?.kyc_details || originalPlayer?.kyc_details;
+    const panDetails = playerData?.pan_details || originalPlayer?.pan_details;
+    
+    // Check for DigiLocker verification flags and documents
+    const hasDigiLockerVerification = kycDetails?.digilocker_verified === 1 || panDetails?.verified_via_digilocker === 1;
+    const hasDocuments = kycDetails?.photo || panDetails?.pan_number || kycDetails?.id_number;
+    
+    // If status is "submitted" but DigiLocker verification is complete with documents, treat as verified
+    if (status === 'submitted' && hasDigiLockerVerification && hasDocuments) {
+      return { label: 'KYC Verified', color: 'bg-green-100 text-green-800', icon: CheckCircle };
+    }
+    
     const statusConfig = {
       approved: { label: 'KYC Verified', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+      verified: { label: 'KYC Verified', color: 'bg-green-100 text-green-800', icon: CheckCircle },
       pending: { label: 'KYC Pending', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
       rejected: { label: 'KYC Rejected', color: 'bg-red-100 text-red-800', icon: XCircle },
       submitted: { label: 'KYC Under Review', color: 'bg-blue-100 text-blue-800', icon: AlertCircle },
@@ -329,7 +352,12 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
 
   if (!player) return null;
 
-  const kycStatus = getKYCStatusBadge(player.kyc_status || 'pending');
+  // Get current player data with DigiLocker info for status determination
+  const currentPlayerData = playerData || player;
+  // Use status from currentPlayerData if available, otherwise fallback to player prop
+  const playerKycStatus = currentPlayerData?.kyc_status || player.kyc_status || 'pending';
+  // Pass both currentPlayerData and original player to check for DigiLocker info in either
+  const kycStatus = getKYCStatusBadge(playerKycStatus, currentPlayerData, player);
   const totalDeposit = parseFloat(player.total_buy_ins || 0);
   const totalWithdrawal = parseFloat(player.total_cash_outs || 0);
   const netPL = totalWithdrawal - totalDeposit;
@@ -408,6 +436,76 @@ const PlayerDetailsDrawer = ({ player, open, onOpenChange, onPlayerUpdated }) =>
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* DigiLocker Verified Information */}
+                {(() => {
+                  const currentPlayerData = playerData || player;
+                  const kycDetails = currentPlayerData?.kyc_details;
+                  const panDetails = currentPlayerData?.pan_details;
+                  const hasDigiLockerVerification = kycDetails?.digilocker_verified || panDetails?.verified_via_digilocker;
+                  
+                  if (!hasDigiLockerVerification) return null;
+                  
+                  return (
+                    <>
+                      <Separator />
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wide text-gray-900 flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-green-600" />
+                          DigiLocker Verified Information
+                        </h3>
+                        
+                        {/* DigiLocker Info Grid - Same format as Contact & Activity (2x2 grid, 4 items) */}
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* PAN Number */}
+                          <Card>
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <FileText className="w-4 h-4 text-gray-500" />
+                                <p className="text-xs text-gray-600">PAN Number</p>
+                              </div>
+                              <p className="font-medium uppercase">{panDetails?.pan_number || 'N/A'}</p>
+                            </CardContent>
+                          </Card>
+                          
+                          {/* Name on PAN */}
+                          <Card>
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <User className="w-4 h-4 text-gray-500" />
+                                <p className="text-xs text-gray-600">Name on PAN</p>
+                              </div>
+                              <p className="font-medium uppercase">{panDetails?.name_on_pan || 'N/A'}</p>
+                            </CardContent>
+                          </Card>
+                          
+                          {/* Date of Birth */}
+                          <Card>
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Calendar className="w-4 h-4 text-gray-500" />
+                                <p className="text-xs text-gray-600">Date of Birth</p>
+                              </div>
+                              <p className="font-medium">{panDetails?.dob ? formatDate(panDetails.dob) : 'N/A'}</p>
+                            </CardContent>
+                          </Card>
+                          
+                          {/* ID Number */}
+                          <Card>
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <FileText className="w-4 h-4 text-gray-500" />
+                                <p className="text-xs text-gray-600">ID Number</p>
+                              </div>
+                              <p className="font-medium">{kycDetails?.id_number || 'N/A'}</p>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+                      <Separator />
+                    </>
+                  );
+                })()}
 
                 {/* Action Buttons */}
                 <div className="flex gap-2">
